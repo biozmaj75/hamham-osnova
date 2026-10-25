@@ -931,6 +931,8 @@ export const handler = async (event) => {
     await init();
     const ck = await clock();
     const user = ['login', 'setup'].includes(body.action) ? null : await currentUser(event, ck.settings.secret);
+    // A temporary password must be replaced before anything else
+    if (user?.must_change && !['me', 'changePassword'].includes(body.action)) throw new HttpError(403, 'Najprej si nastavite svoje geslo');
     return json(await fn(body, user, ck));
   } catch (err) {
     if (err instanceof HttpError) return json({ error: err.message }, err.status);
