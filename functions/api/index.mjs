@@ -239,6 +239,7 @@ function cleanStudent(b) {
   const s = {
     first_name: String(b.first_name || '').trim(),
     last_name: String(b.last_name || '').trim(),
+    ext_id: String(b.ext_id || '').trim().slice(0, 40),
     group_name: String(b.group_name || '').trim(),
     room: String(b.room || '').trim(),
     diet: String(b.diet || '').trim(),
@@ -289,9 +290,9 @@ async function saveStudent(ck, input, userId) {
   await horizon(ck);
   if (!b.id) {
     const { rows } = await db.query(`
-      insert into students (first_name, last_name, group_name, room, diet, diet_reason, notes, def_b, def_l, def_d, weekly, active)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning *`,
-      [s.first_name, s.last_name, s.group_name, s.room, s.diet, s.diet_reason, s.notes, s.def_b, s.def_l, s.def_d, JSON.stringify(s.weekly), s.active]);
+      insert into students (first_name, last_name, group_name, room, diet, diet_reason, notes, def_b, def_l, def_d, weekly, active, ext_id)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`,
+      [s.first_name, s.last_name, s.group_name, s.room, s.diet, s.diet_reason, s.notes, s.def_b, s.def_l, s.def_d, JSON.stringify(s.weekly), s.active, s.ext_id]);
     await fillStudent(ck, rows[0].id);
     return rows[0];
   }
@@ -300,8 +301,8 @@ async function saveStudent(ck, input, userId) {
   const old = before[0];
   const { rows } = await db.query(`
     update students set first_name=$2, last_name=$3, group_name=$4, room=$5, diet=$6, diet_reason=$7, notes=$8,
-      def_b=$9, def_l=$10, def_d=$11, weekly=$12, active=$13 where id=$1 returning *`,
-    [b.id, s.first_name, s.last_name, s.group_name, s.room, s.diet, s.diet_reason, s.notes, s.def_b, s.def_l, s.def_d, JSON.stringify(s.weekly), s.active]);
+      def_b=$9, def_l=$10, def_d=$11, weekly=$12, active=$13, ext_id=$14 where id=$1 returning *`,
+    [b.id, s.first_name, s.last_name, s.group_name, s.room, s.diet, s.diet_reason, s.notes, s.def_b, s.def_l, s.def_d, JSON.stringify(s.weekly), s.active, s.ext_id]);
 
   if (old.active && !s.active) {
     // Moved out / on leave: drop all orders that can still be changed
@@ -328,7 +329,7 @@ async function saveStudent(ck, input, userId) {
 // What each right may see of a student
 const DIET_FIELDS = ['diet', 'diet_reason', 'def_b', 'def_l', 'def_d', 'weekly'];
 const STUDENT_VIEW = {
-  full: ['id', 'first_name', 'last_name', 'group_name', 'room', 'diet', 'diet_reason', 'notes', 'def_b', 'def_l', 'def_d', 'weekly', 'active'],
+  full: ['id', 'ext_id', 'first_name', 'last_name', 'group_name', 'room', 'diet', 'diet_reason', 'notes', 'def_b', 'def_l', 'def_d', 'weekly', 'active'],
   diets: ['id', 'first_name', 'last_name', 'group_name', 'diet', 'diet_reason', 'def_b', 'def_l', 'def_d', 'weekly', 'active'],
 };
 const studentView = user => (can(user, 'students') ? STUDENT_VIEW.full : STUDENT_VIEW.diets);
@@ -637,15 +638,47 @@ const actions = {
     return { student: pick(saved, studentView(user)) };
   },
 
-  // { rows: [{first_name, last_name, group_name, room, diet}] }
+  // { rows: [{ext_id, first_name, last_name, group_name, room, diet, left}], dryRun }
+  // A student is found by ext_id, else by full name; empty cells never overwrite what is already stored.
+  // left = moved out (izstop in the past): an existing student is marked as moved out, a new one is skipped.
   async importStudents(b, user, ck) {
     requireRight(user, 'students');
     if (!Array.isArray(b.rows) || b.rows.length > 1000) throw new HttpError(400, 'Neveljaven uvoz');
-    const clean = b.rows.map(cleanStudent);
-    let created = 0;
-    for (const s of clean) { await saveStudent(ck, s, user.id); created++; }
-    await audit(user, 'student.import', `${created} dijakov`);
-    return { created };
+    const { rows: all } = await getPool().query('select * from students');
+    const key = (f, l) => `${f} ${l}`.toLocaleLowerCase('sl').replace(/\s+/g, ' ').trim();
+    const byExt = new Map(all.filter(s => s.ext_id).map(s => [s.ext_id, s]));
+    const byName = new Map();
+    for (const s of all) { const k = key(s.first_name, s.last_name); byName.set(k, byName.has(k) ? null : s); }
+    const plan = { create: [], update: [], moveOut: [], same: 0, skipped: 0 };
+    const seen = new Set();
+    for (const raw of b.rows) {
+      const r = {};
+      for (const k of ['ext_id', 'first_name', 'last_name', 'group_name', 'room', 'diet']) r[k] = String(raw[k] ?? '').trim();
+      if (!r.first_name || !r.last_name) { plan.skipped++; continue; }
+      const old = (r.ext_id && byExt.get(r.ext_id)) || byName.get(key(r.first_name, r.last_name));
+      if (old && seen.has(old.id)) { plan.skipped++; continue; }
+      if (!old) {
+        if (raw.left) plan.skipped++;
+        else plan.create.push(r);
+        continue;
+      }
+      seen.add(old.id);
+      const next = { ...old };
+      for (const [k, v] of Object.entries(r)) if (v) next[k] = v;
+      if (raw.left && old.active) next.active = false;
+      const changed = ['ext_id', 'first_name', 'last_name', 'group_name', 'room', 'diet', 'active'].some(k => next[k] !== old[k]);
+      if (!changed) plan.same++;
+      else (next.active ? plan.update : plan.moveOut).push(next);
+    }
+    const summary = {
+      create: plan.create.length, update: plan.update.length, moveOut: plan.moveOut.length, same: plan.same, skipped: plan.skipped,
+    };
+    if (b.dryRun) return { summary, moveOutNames: plan.moveOut.map(s => `${s.first_name} ${s.last_name}`) };
+    for (const r of plan.create) await saveStudent(ck, r, user.id);
+    for (const s of [...plan.update, ...plan.moveOut]) await saveStudent(ck, s, user.id);
+    await audit(user, 'student.import',
+      `novih ${summary.create}, posodobljenih ${summary.update}, izseljenih ${summary.moveOut}`);
+    return { summary };
   },
 
   async studentLog(b, user) {

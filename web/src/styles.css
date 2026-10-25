@@ -481,3 +481,14 @@ table.weekly.choices td { display: flex; flex-wrap: wrap; gap: 4px 14px; padding
   .my-select { max-width: 180px; }
   .student-shell .tab { padding: 0 8px; font-size: 13px; }
 }
+
+/* student import */
+.file-pick { display: inline-flex; align-items: center; gap: 8px; align-self: start; border: 1px dashed var(--ink-2); border-radius: var(--radius); padding: 10px 14px; cursor: pointer; font-weight: 500; }
+.file-pick:hover { background: var(--card); }
+.file-pick input { display: none; }
+.import-cols { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 12px; }
+.import-cols label { display: grid; gap: 3px; font-size: 12.5px; }
+.import-cols select { font-size: 13px; padding: 5px 6px; }
+.import-preview { border: 1px solid var(--rule); border-radius: var(--radius); overflow: auto; max-height: 240px; }
+table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13px; }
+.import-summary { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-size: 13.5px; }

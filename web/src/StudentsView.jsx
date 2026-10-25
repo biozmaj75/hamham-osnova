@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, Trash2 } from 'lucide-react';
 import { api } from './api.js';
+import { readXlsx, excelDate } from './xlsx.js';
 import Modal from './Modal.jsx';
 import { loginSlipsPdf, downloadBlob } from './pdf.js';
 import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, WEEKDAYS, DEF_COL, ROLE_NAME, fmtDay, studentName, plural } from './meals.js';
@@ -105,7 +106,7 @@ export default function StudentsView({ me }) {
           onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} onChanged={load} />
       )}
       {logins && <LoginsDialog students={students.filter(s => s.active)} groups={groups} initialGroup={group === '@mine' ? myGroups[0] || '' : group} me={me} onClose={() => { setLogins(false); load(); }} />}
-      {importing && <ImportDialog onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(); }} />}
+      {importing && <ImportDialog me={me} onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(); }} />}
     </div>
   );
 }
@@ -234,24 +235,94 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
 }
 
 // Accepts lines pasted from a spreadsheet: last name, first name, group, room, special diet
-function parseImport(text) {
+function parsePaste(text) {
   return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
     const p = line.split(line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',').map(x => x.trim());
     return { last_name: p[0] || '', first_name: p[1] || '', group_name: p[2] || '', room: p[3] || '', diet: p[4] || '' };
   });
 }
 
-function ImportDialog({ onClose, onDone }) {
+// Only these columns are read from the home's spreadsheet; everything else (EMŠO, addresses, parents …) stays out
+const IMPORT_FIELDS = [
+  ['last_name', 'Priimek', h => h === 'priimek'],
+  ['first_name', 'Ime', h => h === 'ime' || h === 'in ime'],
+  ['group_name', 'Vzgojna skupina', h => h === 'vzgojna skupina' || h === 'skupina'],
+  ['diet', 'Dieta', h => h === 'dieta' || h === 'posebna dieta'],
+  ['room', 'Soba', h => h === 'soba'],
+  ['left', 'Izstop (datum)', h => h === 'izstop'],
+  ['ext_id', 'Zap. št. dijaka', h => h.startsWith('zap')],
+];
+const normHead = v => String(v).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+
+// The header row is the first one (of the top 20) that has a "priimek" column
+function guessColumns(rows) {
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const heads = (rows[i] || []).map(normHead);
+    if (!heads.includes('priimek')) continue;
+    const cols = {};
+    for (const [k, , match] of IMPORT_FIELDS) {
+      const idx = heads.findIndex(match);
+      cols[k] = idx >= 0 ? idx : '';
+    }
+    return { headerRow: i, cols };
+  }
+  return { headerRow: 0, cols: Object.fromEntries(IMPORT_FIELDS.map(([k]) => [k, ''])) };
+}
+
+function ImportDialog({ me, onClose, onDone }) {
+  const [mode, setMode] = useState('file');
+  const [sheet, setSheet] = useState(null); // { name, rows, headerRow, cols }
   const [text, setText] = useState('');
+  const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const rows = parseImport(text);
-  const bad = rows.filter(r => !r.first_name || !r.last_name).length;
+  const today = me.clock.today;
+
+  async function pick(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setError(''); setPreview(null);
+    try {
+      const rows = await readXlsx(file);
+      setSheet({ name: file.name, rows, ...guessColumns(rows) });
+    } catch (err) {
+      setSheet(null);
+      setError(err.message);
+    }
+  }
+
+  const rows = useMemo(() => {
+    if (mode === 'paste') return parsePaste(text);
+    if (!sheet) return [];
+    const cell = (r, k) => (sheet.cols[k] === '' ? '' : r[sheet.cols[k]] ?? '');
+    return sheet.rows.slice(sheet.headerRow + 1)
+      .filter(r => r && r.some(v => String(v).trim()))
+      .map(r => {
+        const out = {};
+        for (const [k] of IMPORT_FIELDS) if (k !== 'left') out[k] = String(cell(r, k)).trim();
+        const left = excelDate(cell(r, 'left'));
+        if (left && left <= today) out.left = true;
+        return out;
+      });
+  }, [mode, text, sheet, today]);
+
+  const named = rows.filter(r => r.first_name && r.last_name);
+  const ready = mode === 'paste' || (sheet && sheet.cols.first_name !== '' && sheet.cols.last_name !== '');
+
+  // Preview what the import would do, every time the rows change
+  useEffect(() => {
+    setPreview(null);
+    if (!ready || !named.length) return undefined;
+    const t = setTimeout(() => {
+      api('importStudents', { rows: named, dryRun: true }).then(setPreview).catch(err => setError(err.message));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [rows, ready]);
 
   async function run() {
     setBusy(true);
     try {
-      await api('importStudents', { rows });
+      await api('importStudents', { rows: named });
       onDone();
     } catch (err) {
       setError(err.message);
@@ -259,17 +330,79 @@ function ImportDialog({ onClose, onDone }) {
     }
   }
 
+  const setCol = (k, v) => setSheet({ ...sheet, cols: { ...sheet.cols, [k]: v === '' ? '' : Number(v) } });
+  const headers = sheet ? (sheet.rows[sheet.headerRow] || []) : [];
+  const sm = preview?.summary;
+
   return (
     <Modal title="Uvoz dijakov" onClose={onClose} wide>
       <div className="form">
-        <p className="hint">Prilepite vrstice iz Excela ali besedilne datoteke, en dijak v vrstici, stolpci v tem vrstnem redu:<br />
-          <b>Priimek · Ime · Skupina · Soba · Posebna dieta</b> (skupina, soba in dieta so lahko prazne). Vsi dobijo navadni meni kot privzeti.</p>
-        <textarea rows={10} value={text} onChange={e => setText(e.target.value)} placeholder={'Novak\tAna\t1. skupina\t104\tbrez glutena\nKos\tBor\t2. skupina\t210'} />
-        {rows.length > 0 && <p className="muted">Prepoznanih dijakov: {rows.length}{bad ? ` — brez polnega imena: ${bad}` : ''}.</p>}
+        <div className="seg">
+          <button className={mode === 'file' ? 'on' : ''} onClick={() => setMode('file')}>Excelova datoteka</button>
+          <button className={mode === 'paste' ? 'on' : ''} onClick={() => setMode('paste')}>Prilepi vrstice</button>
+        </div>
+
+        {mode === 'file' ? (
+          <>
+            <p className="hint">Izberite preglednico dijakov (.xlsx). Prebere se samo prvi list in samo stolpci za prehrano:
+              priimek, ime, vzgojna skupina, dieta, izstop in zap. št. dijaka. <b>Ostali podatki (EMŠO, naslovi, starši, šola …) se ne prenesejo</b> –
+              datoteka se obdela kar v vašem brskalniku.</p>
+            <label className="file-pick">
+              <Upload size={16} /> {sheet ? sheet.name : 'Izberi datoteko .xlsx'}
+              <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={pick} />
+            </label>
+            {sheet && (
+              <fieldset className="perm-field import-cols">
+                <legend>Stolpci <small>prepoznani samodejno, po potrebi popravite</small></legend>
+                {IMPORT_FIELDS.map(([k, label]) => (
+                  <label key={k}>{label}
+                    <select value={sheet.cols[k]} onChange={e => setCol(k, e.target.value)}>
+                      <option value="">— ni v datoteki —</option>
+                      {headers.map((h, i) => String(h).trim() && <option key={i} value={i}>{String(h).replace(/\s+/g, ' ').trim()}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="hint">Prilepite vrstice iz Excela, en dijak v vrstici, stolpci v tem vrstnem redu:<br />
+              <b>Priimek · Ime · Skupina · Soba · Posebna dieta</b> (skupina, soba in dieta so lahko prazne).</p>
+            <textarea rows={8} value={text} onChange={e => setText(e.target.value)} placeholder={'Novak\tAna\t1. skupina\t104\tbrez glutena\nKos\tBor\t2. skupina\t210'} />
+          </>
+        )}
+
+        {named.length > 0 && (
+          <div className="import-preview">
+            <table className="list compact">
+              <thead><tr><th>Priimek</th><th>Ime</th><th>Skupina</th><th>Dieta</th>{mode === 'file' && <th>Zap. št.</th>}</tr></thead>
+              <tbody>
+                {named.slice(0, 6).map((r, i) => (
+                  <tr key={i} className={r.left ? 'inactive' : ''}>
+                    <td>{r.last_name}</td><td>{r.first_name}</td><td>{r.group_name}</td><td>{r.diet}</td>{mode === 'file' && <td>{r.ext_id}{r.left && <em className="tag">izstop</em>}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {named.length > 6 && <p className="muted">… in še {named.length - 6}</p>}
+          </div>
+        )}
+        {sm && (
+          <ul className="import-summary">
+            <li><b>{sm.create}</b> novih dijakov</li>
+            <li><b>{sm.update}</b> posodobljenih (skupina, dieta, ime)</li>
+            {sm.moveOut > 0 && <li><b>{sm.moveOut}</b> izseljenih po datumu izstopa: {preview.moveOutNames.slice(0, 8).join(', ')}{sm.moveOut > 8 ? ' …' : ''}</li>}
+            <li><b>{sm.same}</b> brez sprememb{sm.skipped > 0 && <>, <b>{sm.skipped}</b> preskočenih (izstopili ali podvojeni)</>}</li>
+          </ul>
+        )}
+        <p className="hint">Dijake prepoznamo po zap. št. ali po imenu in priimku, zato lahko isto preglednico uvozite znova – obstoječi se posodobijo, ne podvojijo.
+          Prazna polja v datoteki ne izbrišejo podatkov v aplikaciji. Novi dijaki dobijo navadni meni kot privzeti.</p>
+        {rows.length > named.length && <p className="muted">Vrstic brez imena ali priimka: {rows.length - named.length} (ne uvozijo se).</p>}
         {error && <p className="error">{error}</p>}
         <div className="form-actions">
           <button className="btn ghost" onClick={onClose}>Prekliči</button>
-          <button className="btn primary" disabled={busy || !rows.length || bad > 0} onClick={run}>{busy ? 'Uvažanje …' : `Uvozi (${rows.length})`}</button>
+          <button className="btn primary" disabled={busy || !sm || !(sm.create + sm.update + sm.moveOut)} onClick={run}>{busy ? 'Uvažanje …' : 'Uvozi'}</button>
         </div>
       </div>
     </Modal>

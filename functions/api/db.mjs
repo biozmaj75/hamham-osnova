@@ -100,6 +100,9 @@ alter table students add column if not exists weekly jsonb not null default '{}'
 -- Health reason behind a special diet: only for staff who look after the student, never for the kitchen
 alter table students add column if not exists diet_reason text not null default '';
 
+-- Student number from the home's records (zap. št. dijaka): repeated imports update instead of duplicating
+alter table students add column if not exists ext_id text not null default '';
+
 -- Student logins are linked to their student record; must_change forces a new password at the next login
 alter table users add column if not exists student_id int unique references students(id) on delete cascade;
 alter table users add column if not exists must_change boolean not null default false;
