@@ -454,8 +454,8 @@ table.weekly.choices td { display: flex; flex-wrap: wrap; gap: 4px 14px; padding
 .my-day h2 span { font-family: var(--body); font-weight: 400; font-size: 13px; color: var(--muted); }
 .my-day .tag { margin: 0; display: inline-flex; align-items: center; gap: 3px; }
 .tag.away { background: #f1ead9; color: var(--accent-ink); }
-.my-meal { display: grid; gap: 4px; }
-.my-meal-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.my-meal { grid-template-columns: minmax(0, 1fr); display: grid; gap: 4px; }
+.my-meal-top { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .my-meal-name { font-weight: 600; font-size: 14px; flex-shrink: 0; }
 .my-meal-name small { display: block; font-weight: 400; font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .my-select { flex: 1 1 0; min-width: 0; max-width: 150px; width: auto; font-size: 13px; padding: 5px 6px; }
