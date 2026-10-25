@@ -9,13 +9,13 @@ import AdminView from './AdminView.jsx';
 import PasswordDialog from './PasswordDialog.jsx';
 
 const TABS = [
-  { id: 'orders', label: 'Orders', icon: CalendarDays, roles: ['admin', 'teacher'] },
-  { id: 'kitchen', label: 'Kitchen', icon: ChefHat, roles: ['admin', 'teacher', 'kitchen'] },
-  { id: 'students', label: 'Students', icon: Users, roles: ['admin', 'teacher'] },
-  { id: 'admin', label: 'Administration', icon: Settings, roles: ['admin'] },
+  { id: 'orders', label: 'Naročila', icon: CalendarDays, roles: ['admin', 'teacher'] },
+  { id: 'kitchen', label: 'Kuhinja', icon: ChefHat, roles: ['admin', 'teacher', 'kitchen'] },
+  { id: 'students', label: 'Dijaki', icon: Users, roles: ['admin', 'teacher'] },
+  { id: 'admin', label: 'Skrbništvo', icon: Settings, roles: ['admin'] },
 ];
 
-const ROLE_NAME = { admin: 'Administrator', teacher: 'Teacher', kitchen: 'Kitchen' };
+const ROLE_NAME = { admin: 'Skrbnik', teacher: 'Vzgojitelj', kitchen: 'Kuhinja' };
 
 export default function App() {
   const [me, setMe] = useState(null);
@@ -34,7 +34,7 @@ export default function App() {
 
   useEffect(() => { if (tab) sessionStorage.setItem('tab', tab); }, [tab]);
 
-  if (loading) return <div className="boot">Loading…</div>;
+  if (loading) return <div className="boot">Nalaganje …</div>;
   if (!me) return <Login onSignedIn={async () => setMe(await api('me'))} />;
 
   const tabs = TABS.filter(t => t.roles.includes(me.user.role));
@@ -45,7 +45,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
-          <span>Dorm<em>Meals</em></span>
+          <span>Dom<em>Obroki</em></span>
         </div>
         <nav className="tabs">
           {tabs.map(t => (
@@ -56,8 +56,8 @@ export default function App() {
         </nav>
         <div className="who">
           <span className="who-name">{me.user.name}<small>{ROLE_NAME[me.user.role]}</small></span>
-          <button className="icon-btn" title="Change password" onClick={() => setPwOpen(true)}><KeyRound size={16} /></button>
-          <button className="icon-btn" title="Sign out" onClick={() => { session.token = null; setMe(null); }}><LogOut size={16} /></button>
+          <button className="icon-btn" title="Spremeni geslo" onClick={() => setPwOpen(true)}><KeyRound size={16} /></button>
+          <button className="icon-btn" title="Odjava" onClick={() => { session.token = null; setMe(null); }}><LogOut size={16} /></button>
         </div>
       </header>
       <main className="main">

@@ -25,23 +25,23 @@ export default function Login({ onSignedIn }) {
   return (
     <div className="login-page">
       <section className="login-hero">
-        <p className="eyebrow">Student dormitory</p>
-        <h1>Every plate,<br />counted by six.</h1>
-        <p className="lede">Breakfast, lunch and dinner for the whole house. Orders for tomorrow close at 18:00 — after that the kitchen's numbers are final.</p>
+        <p className="eyebrow">Dijaški dom</p>
+        <h1>Vsak krožnik,<br />preštet do šestih.</h1>
+        <p className="lede">Zajtrk, kosilo in večerja za ves dom. Naročila za jutri se zaprejo ob 18.00 — potem so številke za kuhinjo dokončne.</p>
         <ul className="legend-strip">
-          <li className="v-normal">Normal</li>
-          <li className="v-veg">Vegetarian</li>
-          <li className="v-dry_normal">Dry</li>
-          <li className="v-late_normal">Late</li>
-          <li className="v-light">Light</li>
+          <li className="v-normal">Navadni</li>
+          <li className="v-veg">Vegetarijanski</li>
+          <li className="v-dry_normal">Suhi</li>
+          <li className="v-late_normal">Pozni</li>
+          <li className="v-light">Lahki</li>
         </ul>
       </section>
       <form className="login-card" onSubmit={submit}>
-        <h2>Sign in</h2>
-        <label>Username<input autoFocus value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" /></label>
-        <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" /></label>
+        <h2>Prijava</h2>
+        <label>Uporabniško ime<input autoFocus value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" /></label>
+        <label>Geslo<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" /></label>
         {error && <p className="error">{error}</p>}
-        <button className="btn primary" disabled={busy || !username || !password}>{busy ? 'Signing in…' : 'Sign in'}</button>
+        <button className="btn primary" disabled={busy || !username || !password}>{busy ? 'Prijavljanje …' : 'Prijava'}</button>
       </form>
     </div>
   );

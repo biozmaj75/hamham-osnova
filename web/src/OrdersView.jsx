@@ -2,19 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Lock, Search, X, CalendarRange, Leaf } from 'lucide-react';
 import { api } from './api.js';
 import {
-  MEALS, MEAL_NAMES, VARIANTS, ALL_VARIANTS, VARIANT_LABEL, VARIANT_SHORT,
-  addDays, startWeek, mealServed, dayShort, fmtDay, fmtLong, studentName,
+  MEALS, MEAL_NAMES, MEAL_SHORT, VARIANTS, ALL_VARIANTS, VARIANT_LABEL, VARIANT_SHORT,
+  addDays, startWeek, mealServed, dayShort, fmtDay, fmtLong, studentName, capitalize, plural,
 } from './meals.js';
 
 const key = (sid, day, meal) => `${sid}|${day}|${meal}`;
 const DEF_COL = { B: 'def_b', L: 'def_l', D: 'def_d' };
 
 function describeResult(r) {
-  const parts = [`${r.saved} meal${r.saved === 1 ? '' : 's'} saved`];
+  const parts = [`${r.saved} ${plural(r.saved, 'obrok shranjen', 'obroka shranjena', 'obroki shranjeni', 'obrokov shranjenih')}`];
   const s = r.skipped || {};
-  if (s.locked) parts.push(`${s.locked} skipped — past the 18:00 deadline`);
-  if (s.closed) parts.push(`${s.closed} skipped — kitchen closed`);
-  if (s.invalid) parts.push(`${s.invalid} skipped — that option is not offered for the meal`);
+  if (s.locked) parts.push(`preskočeno ${s.locked} — rok za spremembe je že potekel`);
+  if (s.closed) parts.push(`preskočeno ${s.closed} — kuhinja je zaprta`);
+  if (s.invalid) parts.push(`preskočeno ${s.invalid} — ta izbira pri tem obroku ni mogoča`);
   return parts.join(' · ');
 }
 
@@ -122,30 +122,30 @@ export default function OrdersView({ clock: initialClock }) {
     <div className="orders">
       <div className="toolbar">
         <div className="week-nav">
-          <button className="icon-btn" onClick={() => setWeek(addDays(week, -7))} title="Previous week"><ChevronLeft size={18} /></button>
+          <button className="icon-btn" onClick={() => setWeek(addDays(week, -7))} title="Prejšnji teden"><ChevronLeft size={18} /></button>
           <div className="week-label">
-            <span className="eyebrow">Week</span>
+            <span className="eyebrow">Teden</span>
             <strong>{fmtDay(days[0])} – {fmtDay(days[4])} {days[4].slice(0, 4)}</strong>
           </div>
-          <button className="icon-btn" onClick={() => setWeek(addDays(week, 7))} title="Next week"><ChevronRight size={18} /></button>
-          <button className="btn ghost small" onClick={() => setWeek(startWeek(clock.firstEditable))}>Next open week</button>
+          <button className="icon-btn" onClick={() => setWeek(addDays(week, 7))} title="Naslednji teden"><ChevronRight size={18} /></button>
+          <button className="btn ghost small" onClick={() => setWeek(startWeek(clock.firstEditable))}>Prvi odprti teden</button>
         </div>
         <select value={group} onChange={e => { setGroup(e.target.value); setSelected(new Set()); }}>
-          <option value="">All groups</option>
-          {(data?.groups || []).map(g => <option key={g.group_name} value={g.group_name}>{g.group_name || '(no group)'} · {g.n}</option>)}
+          <option value="">Vse skupine</option>
+          {(data?.groups || []).map(g => <option key={g.group_name} value={g.group_name}>{g.group_name || '(brez skupine)'} · {g.n}</option>)}
         </select>
         <label className="search">
           <Search size={15} />
-          <input placeholder="Find student or room" value={query} onChange={e => setQuery(e.target.value)} />
+          <input placeholder="Išči dijaka ali sobo" value={query} onChange={e => setQuery(e.target.value)} />
         </label>
         <div className="deadline">
           <Lock size={14} />
-          <span>Changes possible from <strong>{fmtLong(clock.firstEditable)}</strong> on · deadline {clock.cutoffHour}:00 the day before</span>
+          <span>Spremembe so možne od <strong>{fmtLong(clock.firstEditable)}</strong> dalje · rok je dan prej ob {clock.cutoffHour}.00</span>
         </div>
       </div>
 
       {error && <p className="error banner">{error}</p>}
-      {!data && !error && <p className="muted pad">Loading orders…</p>}
+      {!data && !error && <p className="muted pad">Nalaganje naročil …</p>}
 
       {data && (
         <div className="grid-wrap">
@@ -153,7 +153,7 @@ export default function OrdersView({ clock: initialClock }) {
             <thead>
               <tr>
                 <th className="sticky-col corner" rowSpan={2}>
-                  <label className="check"><input type="checkbox" checked={allShownSelected} onChange={toggleAll} /> <span>Student</span></label>
+                  <label className="check"><input type="checkbox" checked={allShownSelected} onChange={toggleAll} /> <span>Dijak</span></label>
                 </th>
                 {days.map(d => {
                   const span = MEALS.filter(m => mealServed(d, m)).length;
@@ -161,7 +161,7 @@ export default function OrdersView({ clock: initialClock }) {
                   return (
                     <th key={d} colSpan={span} className={`day-head ${locked ? 'locked' : ''}`}>
                       <span>{dayShort(d)} <b>{fmtDay(d)}</b></span>
-                      {closed.has(d) ? <em className="tag">closed{closed.get(d) ? ` · ${closed.get(d)}` : ''}</em>
+                      {closed.has(d) ? <em className="tag">zaprto{closed.get(d) ? ` · ${closed.get(d)}` : ''}</em>
                         : locked ? <Lock size={12} /> : null}
                     </th>
                   );
@@ -170,7 +170,7 @@ export default function OrdersView({ clock: initialClock }) {
               <tr>
                 {columns.map(c => (
                   <th key={c.day + c.meal} className={`meal-head ${c.meal === 'B' ? 'day-start' : ''} ${!editable(c.day) ? 'locked' : ''}`} title={MEAL_NAMES[c.meal]}>
-                    {c.meal === 'B' ? 'Br' : c.meal === 'L' ? 'Lu' : 'Di'}
+                    {MEAL_SHORT[c.meal]}
                   </th>
                 ))}
               </tr>
@@ -182,7 +182,7 @@ export default function OrdersView({ clock: initialClock }) {
                 return [
                   header && (
                     <tr key={'g' + s.group_name} className="group-row">
-                      <td className="sticky-col" colSpan={1}>{s.group_name || 'No group'}</td>
+                      <td className="sticky-col" colSpan={1}>{s.group_name || 'Brez skupine'}</td>
                       <td colSpan={columns.length} />
                     </tr>
                   ),
@@ -192,7 +192,7 @@ export default function OrdersView({ clock: initialClock }) {
                         <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} />
                         <span className="nm">{studentName(s)}</span>
                         {s.room && <span className="room">{s.room}</span>}
-                        {s.diet && <span className="diet" title={`Special diet: ${s.diet}`}><Leaf size={11} />{s.diet}</span>}
+                        {s.diet && <span className="diet" title={`Posebna dieta: ${s.diet}`}><Leaf size={11} />{s.diet}</span>}
                       </label>
                     </td>
                     {columns.map(c => {
@@ -204,7 +204,7 @@ export default function OrdersView({ clock: initialClock }) {
                           <button
                             className={`chip v-${v} ${o?.source === 'manual' ? 'manual' : ''}`}
                             disabled={locked}
-                            title={`${MEAL_NAMES[c.meal]} ${fmtDay(c.day)}: ${VARIANT_LABEL[v]}${o?.source === 'manual' ? ' (changed by hand)' : ''}`}
+                            title={`${MEAL_NAMES[c.meal]} ${fmtDay(c.day)}: ${VARIANT_LABEL[v]}${o?.source === 'manual' ? ' (ročno spremenjeno)' : ''}`}
                             onClick={e => openCell(e, s, c.day, c.meal)}
                           >{VARIANT_SHORT[v]}</button>
                         </td>
@@ -214,12 +214,12 @@ export default function OrdersView({ clock: initialClock }) {
                 ];
               })}
               {students.length === 0 && (
-                <tr><td className="sticky-col muted" colSpan={columns.length + 1}>No students here yet. Add them under <b>Students</b>.</td></tr>
+                <tr><td className="sticky-col muted" colSpan={columns.length + 1}>Tu še ni dijakov. Dodajte jih v zavihku <b>Dijaki</b>.</td></tr>
               )}
             </tbody>
             <tfoot>
               <tr>
-                <td className="sticky-col">Registered{group ? ' in group' : ''}</td>
+                <td className="sticky-col">Prijavljenih{group ? ' v skupini' : ''}</td>
                 {columns.map(c => <td key={c.day + c.meal} className={c.meal === 'B' ? 'day-start' : ''}>{totals[`${c.day}|${c.meal}`] || 0}</td>)}
               </tr>
             </tfoot>
@@ -291,8 +291,8 @@ function CellPopover({ pop, orders, selectedCount, onClose, onPick }) {
   return (
     <div className="popover" ref={ref} style={{ left, top }}>
       <header>
-        <strong>{everyone ? `${selectedCount} selected students` : studentName(student)}</strong>
-        <span>{MEAL_NAMES[meal]} · {fmtLong(day)}</span>
+        <strong>{everyone ? `Izbrani dijaki: ${selectedCount}` : studentName(student)}</strong>
+        <span>{MEAL_NAMES[meal]} · {capitalize(fmtLong(day))}</span>
       </header>
       <div className="pop-options">
         {VARIANTS[meal].map(v => (
@@ -301,19 +301,19 @@ function CellPopover({ pop, orders, selectedCount, onClose, onPick }) {
           </button>
         ))}
         <button className={`opt ${current === 'none' && !everyone ? 'cur' : ''}`} onClick={() => onPick('none', 'meal', everyone)}>
-          <span className="chip v-none">–</span>Not registered
+          <span className="chip v-none">–</span>Ni prijavljen
         </button>
         <button className="opt" onClick={() => onPick('default', 'meal', everyone)}>
-          <span className="chip v-default">↺</span>Back to default{!everyone && ` (${VARIANT_LABEL[def]})`}
+          <span className="chip v-default">↺</span>Nazaj na privzeto{!everyone && ` (${VARIANT_LABEL[def]})`}
         </button>
       </div>
       <div className="pop-day">
-        <span>Whole day</span>
-        <button className="btn small ghost" onClick={() => onPick('none', 'day', everyone)}>Deregister day</button>
-        <button className="btn small ghost" onClick={() => onPick('default', 'day', everyone)}>Default menu</button>
+        <span>Cel dan</span>
+        <button className="btn small ghost" onClick={() => onPick('none', 'day', everyone)}>Odjavi dan</button>
+        <button className="btn small ghost" onClick={() => onPick('default', 'day', everyone)}>Privzeti meni</button>
       </div>
       {selectedCount > 1 && (
-        <label className="pop-all"><input type="checkbox" checked={everyone} onChange={e => setEveryone(e.target.checked)} /> Apply to all {selectedCount} selected students</label>
+        <label className="pop-all"><input type="checkbox" checked={everyone} onChange={e => setEveryone(e.target.checked)} /> Uporabi za vse izbrane dijake ({selectedCount})</label>
       )}
     </div>
   );
@@ -332,27 +332,27 @@ function BulkBar({ count, defaultFrom, defaultTo, minDay, onApply, onClear }) {
 
   return (
     <div className="bulkbar">
-      <div className="bulk-count"><CalendarRange size={16} /><strong>{count}</strong> selected</div>
-      <label>From<input type="date" value={from} min={minDay} onChange={e => setFrom(e.target.value)} /></label>
-      <label>To<input type="date" value={to} min={from} onChange={e => setTo(e.target.value)} /></label>
+      <div className="bulk-count"><CalendarRange size={16} />izbranih: <strong>{count}</strong></div>
+      <label>Od<input type="date" value={from} min={minDay} onChange={e => setFrom(e.target.value)} /></label>
+      <label>Do<input type="date" value={to} min={from} onChange={e => setTo(e.target.value)} /></label>
       <div className="meal-toggles">
         {MEALS.map(m => (
           <button key={m} className={meals.includes(m) ? 'mt on' : 'mt'} onClick={() => toggleMeal(m)}>{MEAL_NAMES[m]}</button>
         ))}
       </div>
-      <label>Set to
+      <label>Nastavi na
         <select value={variant} onChange={e => setVariant(e.target.value)}>
-          <option value="none">Not registered (deregister)</option>
-          <option value="default">Each student's default menu</option>
-          {ALL_VARIANTS.map(v => <option key={v} value={v}>{VARIANT_LABEL[v]}{v === 'light' ? ' (dinner only)' : v.includes('_') ? ' (lunch & dinner)' : ''}</option>)}
+          <option value="none">Ni prijavljen (odjava)</option>
+          <option value="default">Privzeti meni vsakega dijaka</option>
+          {ALL_VARIANTS.map(v => <option key={v} value={v}>{VARIANT_LABEL[v]}{v === 'light' ? ' (samo večerja)' : v.includes('_') ? ' (kosilo in večerja)' : ''}</option>)}
         </select>
       </label>
       <button
         className="btn primary"
         disabled={busy || !meals.length || !from || !to || to < from}
         onClick={async () => { setBusy(true); await onApply({ from, to, meals, variant }); setBusy(false); }}
-      >{busy ? 'Saving…' : 'Apply'}</button>
-      <button className="icon-btn" title="Clear selection" onClick={onClear}><X size={18} /></button>
+      >{busy ? 'Shranjevanje …' : 'Uporabi'}</button>
+      <button className="icon-btn" title="Počisti izbiro" onClick={onClear}><X size={18} /></button>
     </div>
   );
 }
@@ -363,8 +363,8 @@ function Legend() {
       {['normal', 'veg', 'dry_normal', 'dry_veg', 'late_normal', 'late_veg', 'light', 'none'].map(v => (
         <span key={v}><span className={`chip v-${v}`}>{VARIANT_SHORT[v]}</span>{VARIANT_LABEL[v]}</span>
       ))}
-      <span><span className="chip v-normal manual">N</span>Changed by hand</span>
-      <span><span className="chip v-normal" style={{ opacity: 0.45 }}>N</span>Locked</span>
+      <span><span className="chip v-normal manual">N</span>Ročno spremenjeno</span>
+      <span><span className="chip v-normal" style={{ opacity: 0.45 }}>N</span>Zaklenjeno</span>
     </div>
   );
 }

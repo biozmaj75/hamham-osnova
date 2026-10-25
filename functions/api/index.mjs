@@ -45,12 +45,12 @@ async function clock() {
 }
 
 function daysBetween(from, to) {
-  if (!isDate(from) || !isDate(to)) throw new HttpError(400, 'Invalid date');
-  if (from > to) throw new HttpError(400, '"from" must not be after "to"');
+  if (!isDate(from) || !isDate(to)) throw new HttpError(400, 'Neveljaven datum');
+  if (from > to) throw new HttpError(400, 'Začetni datum ne sme biti za končnim');
   const out = [];
   for (let d = from; d <= to; d = addDays(d, 1)) {
     out.push(d);
-    if (out.length > MAX_RANGE_DAYS) throw new HttpError(400, 'Date range is too long');
+    if (out.length > MAX_RANGE_DAYS) throw new HttpError(400, 'Obdobje je predolgo');
   }
   return out;
 }
@@ -158,8 +158,8 @@ async function currentUser(event, secret) {
 }
 
 function requireRole(user, ...roles) {
-  if (!user) throw new HttpError(401, 'Please sign in');
-  if (!roles.includes(user.role)) throw new HttpError(403, 'Not allowed for your role');
+  if (!user) throw new HttpError(401, 'Prosimo, prijavite se');
+  if (!roles.includes(user.role)) throw new HttpError(403, 'Za vašo vlogo to ni dovoljeno');
 }
 
 // ---------------------------------------------------------------- students
@@ -177,9 +177,9 @@ function cleanStudent(b) {
     def_d: b.def_d || 'normal',
     active: b.active !== false,
   };
-  if (!s.first_name || !s.last_name) throw new HttpError(400, 'First and last name are required');
+  if (!s.first_name || !s.last_name) throw new HttpError(400, 'Ime in priimek sta obvezna');
   for (const m of MEALS) {
-    if (!validVariant(m, s[DEF_COL[m]])) throw new HttpError(400, `Invalid default for meal ${m}`);
+    if (!validVariant(m, s[DEF_COL[m]])) throw new HttpError(400, 'Neveljaven privzeti obrok');
   }
   return s;
 }
@@ -214,7 +214,7 @@ async function saveStudent(ck, b, userId) {
     return rows[0];
   }
   const { rows: before } = await db.query('select * from students where id = $1', [b.id]);
-  if (!before[0]) throw new HttpError(400, 'Student not found');
+  if (!before[0]) throw new HttpError(400, 'Dijaka ni mogoče najti');
   const old = before[0];
   const { rows } = await db.query(`
     update students set first_name=$2, last_name=$3, group_name=$4, room=$5, diet=$6, notes=$7,
@@ -245,7 +245,7 @@ async function saveStudent(ck, b, userId) {
 // ---------------------------------------------------------------- kitchen
 
 async function kitchenDay(ck, day) {
-  if (!isDate(day)) throw new HttpError(400, 'Invalid date');
+  if (!isDate(day)) throw new HttpError(400, 'Neveljaven datum');
   await horizon(ck);
   await materialize(ck, day);
   const db = getPool();
@@ -286,8 +286,8 @@ const actions = {
   async setup(b) {
     const db = getPool();
     const { rows } = await db.query('select count(*)::int as n from users');
-    if (rows[0].n > 0) throw new HttpError(403, 'Setup already done');
-    if (!b.username || !b.password || String(b.password).length < 8) throw new HttpError(400, 'Username and a password of at least 8 characters are required');
+    if (rows[0].n > 0) throw new HttpError(403, 'Namestitev je že opravljena');
+    if (!b.username || !b.password || String(b.password).length < 8) throw new HttpError(400, 'Potrebna sta uporabniško ime in geslo z vsaj 8 znaki');
     await db.query('insert into users (username, name, role, pw_hash) values ($1, $2, $3, $4)',
       [String(b.username).trim().toLowerCase(), b.name || 'Administrator', 'admin', hashPassword(b.password)]);
     return { ok: true };
@@ -297,7 +297,7 @@ const actions = {
     const { rows } = await getPool().query('select * from users where username = $1 and active',
       [String(b.username || '').trim().toLowerCase()]);
     const u = rows[0];
-    if (!u || !verifyPassword(String(b.password || ''), u.pw_hash)) throw new HttpError(401, 'Wrong username or password');
+    if (!u || !verifyPassword(String(b.password || ''), u.pw_hash)) throw new HttpError(401, 'Napačno uporabniško ime ali geslo');
     return {
       token: signToken({ uid: u.id }, ck.settings.secret),
       user: { id: u.id, username: u.username, name: u.name, role: u.role },
@@ -312,8 +312,8 @@ const actions = {
   async changePassword(b, user) {
     requireRole(user, 'admin', 'teacher', 'kitchen');
     const { rows } = await getPool().query('select pw_hash from users where id = $1', [user.id]);
-    if (!verifyPassword(String(b.current || ''), rows[0].pw_hash)) throw new HttpError(400, 'Current password is wrong');
-    if (String(b.password || '').length < 8) throw new HttpError(400, 'New password must have at least 8 characters');
+    if (!verifyPassword(String(b.current || ''), rows[0].pw_hash)) throw new HttpError(400, 'Trenutno geslo ni pravilno');
+    if (String(b.password || '').length < 8) throw new HttpError(400, 'Novo geslo mora imeti vsaj 8 znakov');
     await getPool().query('update users set pw_hash = $2 where id = $1', [user.id, hashPassword(b.password)]);
     return { ok: true };
   },
@@ -344,7 +344,7 @@ const actions = {
   // Individual cells: { changes: [{student_id, day, meal, variant}] }
   async setOrders(b, user, ck) {
     requireRole(user, 'admin', 'teacher');
-    if (!Array.isArray(b.changes) || b.changes.length > 5000) throw new HttpError(400, 'Invalid changes');
+    if (!Array.isArray(b.changes) || b.changes.length > 5000) throw new HttpError(400, 'Neveljavne spremembe');
     return applyChanges(ck, b.changes, user.id);
   },
 
@@ -354,8 +354,8 @@ const actions = {
     const days = daysBetween(b.from, b.to);
     const ids = (b.student_ids || []).map(Number).filter(Boolean);
     const meals = (b.meals || []).filter(m => MEALS.includes(m));
-    if (!ids.length || !meals.length) throw new HttpError(400, 'Choose at least one student and one meal');
-    if (ids.length * days.length * meals.length > 60000) throw new HttpError(400, 'Too many changes at once — shorten the date range');
+    if (!ids.length || !meals.length) throw new HttpError(400, 'Izberite vsaj enega dijaka in en obrok');
+    if (ids.length * days.length * meals.length > 60000) throw new HttpError(400, 'Preveč sprememb hkrati — skrajšajte obdobje');
     const requests = [];
     for (const student_id of ids) for (const day of days) for (const meal of meals) {
       if (mealServed(day, meal)) requests.push({ student_id, day, meal, variant: b.variant });
@@ -377,7 +377,7 @@ const actions = {
   // { rows: [{first_name, last_name, group_name, room, diet}] }
   async importStudents(b, user, ck) {
     requireRole(user, 'admin', 'teacher');
-    if (!Array.isArray(b.rows) || b.rows.length > 1000) throw new HttpError(400, 'Invalid import');
+    if (!Array.isArray(b.rows) || b.rows.length > 1000) throw new HttpError(400, 'Neveljaven uvoz');
     const clean = b.rows.map(cleanStudent);
     let created = 0;
     for (const s of clean) { await saveStudent(ck, s, user.id); created++; }
@@ -414,25 +414,25 @@ const actions = {
     const u = b.user || {};
     const username = String(u.username || '').trim().toLowerCase();
     const name = String(u.name || '').trim();
-    if (!username || !name) throw new HttpError(400, 'Username and name are required');
-    if (!['admin', 'teacher', 'kitchen'].includes(u.role)) throw new HttpError(400, 'Invalid role');
-    if (u.password && String(u.password).length < 8) throw new HttpError(400, 'Password must have at least 8 characters');
+    if (!username || !name) throw new HttpError(400, 'Uporabniško ime in ime sta obvezna');
+    if (!['admin', 'teacher', 'kitchen'].includes(u.role)) throw new HttpError(400, 'Neveljavna vloga');
+    if (u.password && String(u.password).length < 8) throw new HttpError(400, 'Geslo mora imeti vsaj 8 znakov');
     const db = getPool();
     try {
       if (!u.id) {
-        if (!u.password) throw new HttpError(400, 'Password is required');
+        if (!u.password) throw new HttpError(400, 'Geslo je obvezno');
         await db.query('insert into users (username, name, role, pw_hash) values ($1,$2,$3,$4)',
           [username, name, u.role, hashPassword(u.password)]);
       } else {
         if (Number(u.id) === user.id && (u.role !== 'admin' || u.active === false)) {
-          throw new HttpError(400, 'You cannot remove your own admin access');
+          throw new HttpError(400, 'Sami sebi ne morete odvzeti skrbniških pravic');
         }
         await db.query('update users set username=$2, name=$3, role=$4, active=$5 where id=$1',
           [u.id, username, name, u.role, u.active !== false]);
         if (u.password) await db.query('update users set pw_hash=$2 where id=$1', [u.id, hashPassword(u.password)]);
       }
     } catch (err) {
-      if (err.code === '23505') throw new HttpError(400, 'This username is already taken');
+      if (err.code === '23505') throw new HttpError(400, 'To uporabniško ime je že zasedeno');
       throw err;
     }
     return { ok: true };
@@ -446,9 +446,9 @@ const actions = {
 
   async saveSettings(b, user) {
     requireRole(user, 'admin');
-    try { new Intl.DateTimeFormat('en', { timeZone: b.timezone }); } catch { throw new HttpError(400, 'Unknown time zone'); }
+    try { new Intl.DateTimeFormat('en', { timeZone: b.timezone }); } catch { throw new HttpError(400, 'Neznan časovni pas'); }
     const hour = Number(b.cutoff_hour);
-    if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new HttpError(400, 'Deadline hour must be 0–23');
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new HttpError(400, 'Ura roka mora biti med 0 in 23');
     await setSetting('timezone', b.timezone);
     await setSetting('cutoff_hour', hour);
     return { ok: true };
@@ -456,7 +456,7 @@ const actions = {
 
   async setClosedDay(b, user) {
     requireRole(user, 'admin');
-    if (!isDate(b.day)) throw new HttpError(400, 'Invalid date');
+    if (!isDate(b.day)) throw new HttpError(400, 'Neveljaven datum');
     if (b.remove) await getPool().query('delete from closed_days where day = $1', [b.day]);
     else await getPool().query(
       'insert into closed_days (day, reason) values ($1, $2) on conflict (day) do update set reason = excluded.reason',
@@ -478,7 +478,7 @@ export const handler = async (event) => {
       ? JSON.parse(event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString() : event.body)
       : {};
     const fn = actions[body.action];
-    if (!fn) return json({ error: 'Unknown action' }, 400);
+    if (!fn) return json({ error: 'Neznano dejanje' }, 400);
     await init();
     const ck = await clock();
     const user = ['login', 'setup'].includes(body.action) ? null : await currentUser(event, ck.settings.secret);
@@ -486,6 +486,6 @@ export const handler = async (event) => {
   } catch (err) {
     if (err instanceof HttpError) return json({ error: err.message }, err.status);
     console.error(err);
-    return json({ error: 'Server error' }, 500);
+    return json({ error: 'Napaka na strežniku' }, 500);
   }
 };

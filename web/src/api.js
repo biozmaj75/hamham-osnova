@@ -12,11 +12,11 @@ export async function api(action, params = {}) {
   if (session.token) headers.Authorization = `Bearer ${session.token}`;
   const res = await fetch(API_BASE, { method: 'POST', headers, body: JSON.stringify({ action, ...params }) });
   let data;
-  try { data = await res.json(); } catch { throw new Error('The server did not answer. Please try again.'); }
+  try { data = await res.json(); } catch { throw new Error('Strežnik se ni odzval. Poskusite znova.'); }
   if (res.status === 401 && action !== 'login') {
     session.token = null;
     window.dispatchEvent(new Event('signed-out'));
   }
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  if (!res.ok) throw new Error(data.error || 'Zahteva ni uspela');
   return data;
 }

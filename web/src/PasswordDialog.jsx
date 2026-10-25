@@ -11,7 +11,7 @@ export default function PasswordDialog({ onClose }) {
     e.preventDefault();
     try {
       await api('changePassword', { current, password });
-      setMsg({ ok: true, text: 'Password changed.' });
+      setMsg({ ok: true, text: 'Geslo je spremenjeno.' });
       setCurrent(''); setPassword('');
     } catch (err) {
       setMsg({ ok: false, text: err.message });
@@ -19,12 +19,12 @@ export default function PasswordDialog({ onClose }) {
   }
 
   return (
-    <Modal title="Change password" onClose={onClose}>
+    <Modal title="Sprememba gesla" onClose={onClose}>
       <form className="form" onSubmit={save}>
-        <label>Current password<input type="password" value={current} onChange={e => setCurrent(e.target.value)} /></label>
-        <label>New password (min. 8 characters)<input type="password" value={password} onChange={e => setPassword(e.target.value)} /></label>
+        <label>Trenutno geslo<input type="password" value={current} onChange={e => setCurrent(e.target.value)} /></label>
+        <label>Novo geslo (vsaj 8 znakov)<input type="password" value={password} onChange={e => setPassword(e.target.value)} /></label>
         {msg && <p className={msg.ok ? 'success' : 'error'}>{msg.text}</p>}
-        <div className="form-actions"><button className="btn primary" disabled={!current || password.length < 8}>Save</button></div>
+        <div className="form-actions"><button className="btn primary" disabled={!current || password.length < 8}>Shrani</button></div>
       </form>
     </Modal>
   );

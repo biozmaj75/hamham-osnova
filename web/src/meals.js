@@ -1,6 +1,8 @@
 export const MEALS = ['B', 'L', 'D'];
 
-export const MEAL_NAMES = { B: 'Breakfast', L: 'Lunch', D: 'Dinner' };
+export const MEAL_NAMES = { B: 'Zajtrk', L: 'Kosilo', D: 'Večerja' };
+
+export const MEAL_SHORT = { B: 'Za', L: 'Ko', D: 'Ve' };
 
 export const VARIANTS = {
   B: ['normal', 'veg'],
@@ -11,29 +13,29 @@ export const VARIANTS = {
 export const ALL_VARIANTS = VARIANTS.D;
 
 export const VARIANT_LABEL = {
-  none: 'Not registered',
-  normal: 'Normal',
-  veg: 'Vegetarian',
-  dry_normal: 'Dry normal',
-  dry_veg: 'Dry vegetarian',
-  late_normal: 'Late normal',
-  late_veg: 'Late vegetarian',
-  light: 'Light',
+  none: 'Ni prijavljen',
+  normal: 'Navadni',
+  veg: 'Vegetarijanski',
+  dry_normal: 'Suhi navadni',
+  dry_veg: 'Suhi vegetarijanski',
+  late_normal: 'Pozni navadni',
+  late_veg: 'Pozni vegetarijanski',
+  light: 'Lahki',
 };
 
 export const VARIANT_SHORT = {
   none: '–',
   normal: 'N',
   veg: 'V',
-  dry_normal: 'DN',
-  dry_veg: 'DV',
-  late_normal: 'LN',
-  late_veg: 'LV',
-  light: 'Li',
+  dry_normal: 'SN',
+  dry_veg: 'SV',
+  late_normal: 'PN',
+  late_veg: 'PV',
+  light: 'La',
 };
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const LONG_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_NAMES = ['ned', 'pon', 'tor', 'sre', 'čet', 'pet', 'sob'];
+const LONG_DAY_NAMES = ['nedelja', 'ponedeljek', 'torek', 'sreda', 'četrtek', 'petek', 'sobota'];
 
 const at = day => new Date(day + 'T12:00:00Z');
 
@@ -78,6 +80,14 @@ export function fmtDay(day) {
 export function fmtLong(day) {
   const d = at(day);
   return `${LONG_DAY_NAMES[d.getUTCDay()]}, ${d.getUTCDate()}. ${d.getUTCMonth() + 1}. ${d.getUTCFullYear()}`;
+}
+
+export const capitalize = t => t.charAt(0).toUpperCase() + t.slice(1);
+
+// Slovenian plural: 1 obrok, 2 obroka, 3–4 obroki, 5+ obrokov (by the last two digits)
+export function plural(n, one, two, few, many) {
+  const r = n % 100;
+  return r === 1 ? one : r === 2 ? two : r === 3 || r === 4 ? few : many;
 }
 
 export function studentName(s) { return `${s.last_name} ${s.first_name}`; }

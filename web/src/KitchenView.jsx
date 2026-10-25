@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Printer, Lock, Clock } from 'lucide-react';
 import { api } from './api.js';
 import {
   MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT,
-  addDays, dow, mondayOf, mealServed, nextSchoolDay, dayShort, fmtDay, fmtLong, studentName,
+  addDays, dow, mondayOf, mealServed, nextSchoolDay, dayShort, fmtDay, fmtLong, studentName, capitalize,
 } from './meals.js';
 
 function prevSchoolDay(day) {
@@ -37,12 +37,12 @@ export default function KitchenView({ clock }) {
     <div className="kitchen">
       <div className="toolbar no-print">
         <div className="week-nav">
-          <button className="icon-btn" onClick={() => setDay(prevSchoolDay(day))} title="Previous day"><ChevronLeft size={18} /></button>
+          <button className="icon-btn" onClick={() => setDay(prevSchoolDay(day))} title="Prejšnji dan"><ChevronLeft size={18} /></button>
           <input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} />
-          <button className="icon-btn" onClick={() => setDay(nextSchoolDay(addDays(day, 1)))} title="Next day"><ChevronRight size={18} /></button>
-          <button className="btn ghost small" onClick={() => setDay(nextSchoolDay(addDays(clock.today, 1)))}>Tomorrow</button>
+          <button className="icon-btn" onClick={() => setDay(nextSchoolDay(addDays(day, 1)))} title="Naslednji dan"><ChevronRight size={18} /></button>
+          <button className="btn ghost small" onClick={() => setDay(nextSchoolDay(addDays(clock.today, 1)))}>Jutri</button>
         </div>
-        <button className="btn" onClick={() => window.print()}><Printer size={16} /> Print</button>
+        <button className="btn" onClick={() => window.print()}><Printer size={16} /> Natisni</button>
       </div>
 
       {error && <p className="error banner">{error}</p>}
@@ -51,15 +51,15 @@ export default function KitchenView({ clock }) {
         <>
           <div className="kitchen-head">
             <div>
-              <p className="eyebrow">Kitchen sheet</p>
-              <h1>{fmtLong(day)}</h1>
+              <p className="eyebrow">Seznam za kuhinjo</p>
+              <h1>{capitalize(fmtLong(day))}</h1>
             </div>
-            {data.closed ? <span className="status closed">Kitchen closed{data.closed.reason ? ` — ${data.closed.reason}` : ''}</span>
-              : data.locked ? <span className="status final"><Lock size={14} /> Final — orders closed</span>
-                : <span className="status open"><Clock size={14} /> Still open until {fmtDay(addDays(day, -1))} {clock.cutoffHour}:00 — numbers may change</span>}
+            {data.closed ? <span className="status closed">Kuhinja zaprta{data.closed.reason ? ` — ${data.closed.reason}` : ''}</span>
+              : data.locked ? <span className="status final"><Lock size={14} /> Dokončno — naročila so zaprta</span>
+                : <span className="status open"><Clock size={14} /> Odprto do {fmtDay(addDays(day, -1))} ob {clock.cutoffHour}.00 — številke se še lahko spremenijo</span>}
           </div>
 
-          {dow(day) === 0 || dow(day) === 6 ? <p className="muted pad">No meals are served on weekends.</p> : (
+          {dow(day) === 0 || dow(day) === 6 ? <p className="muted pad">Ob vikendih ni obrokov.</p> : (
             <>
               <section className="meal-cards">
                 {MEALS.filter(m => mealServed(day, m)).map(m => {
@@ -84,8 +84,8 @@ export default function KitchenView({ clock }) {
               </section>
 
               <section className="lists">
-                <PeopleList title="Dry meals (packed)" rows={data.dry} />
-                <PeopleList title="Late meals (kept aside)" rows={data.late} />
+                <PeopleList title="Suhi obroki (paketi)" rows={data.dry} />
+                <PeopleList title="Pozni obroki (shranjeni)" rows={data.late} />
                 <DietList rows={data.diets} />
               </section>
             </>
@@ -108,8 +108,8 @@ function DietList({ rows }) {
   }
   return (
     <article className="people diet-people">
-      <header><h3>Special diets</h3><span className="count">{people.length}</span></header>
-      {people.length === 0 && <p className="muted">None.</p>}
+      <header><h3>Posebne diete</h3><span className="count">{people.length}</span></header>
+      {people.length === 0 && <p className="muted">Ni.</p>}
       <ol>
         {people.map(p => (
           <li key={p.id}>
@@ -132,7 +132,7 @@ function PeopleList({ title, rows, showDiet }) {
   return (
     <article className="people">
       <header><h3>{title}</h3><span className="count">{rows.length}</span></header>
-      {byMeal.length === 0 && <p className="muted">None.</p>}
+      {byMeal.length === 0 && <p className="muted">Ni.</p>}
       {byMeal.map(([m, list]) => (
         <div key={m} className="people-meal">
           <h4>{MEAL_NAMES[m]} · {list.length}</h4>
@@ -158,15 +158,15 @@ function WeekTable({ week, activeDay, onPick }) {
   const closed = new Set(week.closed.map(x => x.day));
   return (
     <section className="week-table">
-      <h3>Week overview</h3>
+      <h3>Pregled tedna</h3>
       <div className="grid-wrap">
         <table className="grid compact">
           <thead>
             <tr>
-              <th className="sticky-col">Meal</th>
+              <th className="sticky-col">Obrok</th>
               {week.days.map(d => (
                 <th key={d} className={`clickable ${d === activeDay ? 'active' : ''}`} onClick={() => onPick(d)}>
-                  {dayShort(d)} <b>{fmtDay(d)}</b>{closed.has(d) && <em className="tag">closed</em>}
+                  {dayShort(d)} <b>{fmtDay(d)}</b>{closed.has(d) && <em className="tag">zaprto</em>}
                 </th>
               ))}
             </tr>
