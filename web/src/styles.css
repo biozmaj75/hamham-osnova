@@ -389,3 +389,4 @@ table.weekly .no-meal { color: var(--muted); font-size: 12px; font-style: italic
   .menu-grid textarea { border: none; resize: none; overflow: hidden; }
   .menu-grid .sticky-col { position: static; }
 }
+.card-head .btn { white-space: nowrap; flex-shrink: 0; }
