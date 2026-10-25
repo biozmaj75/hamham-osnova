@@ -97,8 +97,40 @@ create table if not exists menus (
 -- Weekday exceptions to the default menu: {"3": {"L": "dry_normal"}} = dry lunch every Wednesday
 alter table students add column if not exists weekly jsonb not null default '{}';
 
+-- Health reason behind a special diet: only for staff who look after the student, never for the kitchen
+alter table students add column if not exists diet_reason text not null default '';
+
+-- Student logins are linked to their student record; must_change forces a new password at the next login
+alter table users add column if not exists student_id int unique references students(id) on delete cascade;
+alter table users add column if not exists must_change boolean not null default false;
+alter table users add column if not exists last_login timestamptz;
+-- Extra rights granted to a single account on top of its role, e.g. {menu}
+alter table users add column if not exists perms text[] not null default '{}';
+
 alter table users drop constraint if exists users_role_check;
-alter table users add constraint users_role_check check (role in ('admin', 'teacher', 'dietitian', 'kitchen'));
+alter table users add constraint users_role_check
+  check (role in ('admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'student'));
+
+-- Absences: every meal in the range is deregistered; cancelling restores the default menu
+create table if not exists absences (
+  id serial primary key,
+  student_id int not null references students(id) on delete cascade,
+  day_from date not null,
+  day_to date not null,
+  reason text not null default '',
+  created_by int references users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists absences_student_idx on absences(student_id, day_to);
+
+-- Who changed accounts, rights, settings and student records
+create table if not exists audit_log (
+  id bigserial primary key,
+  at timestamptz not null default now(),
+  user_id int references users(id) on delete set null,
+  action text not null,
+  details text not null default ''
+);
 `;
 
 const DEFAULT_SETTINGS = {
@@ -107,6 +139,10 @@ const DEFAULT_SETTINGS = {
   materialized_through: '',
   school_year_start: '',
   school_year_end: '',
+  // Variants students may pick themselves (JSON {meal: [variants]}); empty = all
+  student_choices: '',
+  // Serving times shown to students and the kitchen (JSON {B, L, D, late, dry})
+  meal_times: '',
 };
 
 export async function init() {

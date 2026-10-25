@@ -120,3 +120,7 @@ export function plural(n, one, two, few, many) {
 }
 
 export function studentName(s) { return `${s.last_name} ${s.first_name}`; }
+
+export const ROLE_NAME = {
+  admin: 'Skrbnik', principal: 'Ravnatelj', teacher: 'Vzgojitelj', dietitian: 'Organizator prehrane', kitchen: 'Kuhinja', student: 'Dijak',
+};

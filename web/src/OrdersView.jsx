@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Lock, Search, X, CalendarRange, Leaf } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, Search, X, CalendarRange, Leaf, CalendarOff } from 'lucide-react';
 import { api } from './api.js';
 import {
   MEALS, MEAL_NAMES, MEAL_SHORT, VARIANTS, ALL_VARIANTS, VARIANT_LABEL, VARIANT_SHORT,
@@ -8,6 +8,9 @@ import {
 } from './meals.js';
 
 const key = (sid, day, meal) => `${sid}|${day}|${meal}`;
+
+// The absence covering a student's day, if any
+const absenceOn = (absences, sid, day) => absences?.find(a => a.student_id === sid && a.day_from <= day && day <= a.day_to);
 
 function describeResult(r) {
   const parts = [`${r.saved} ${plural(r.saved, 'obrok shranjen', 'obroka shranjena', 'obroki shranjeni', 'obrokov shranjenih')}`];
@@ -57,7 +60,7 @@ export default function OrdersView({ clock: initialClock }) {
   const students = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = data?.students || [];
-    return q ? list.filter(s => `${s.first_name} ${s.last_name} ${s.room}`.toLowerCase().includes(q)) : list;
+    return q ? list.filter(s => `${s.first_name} ${s.last_name} ${s.room || ''}`.toLowerCase().includes(q)) : list;
   }, [data, query]);
 
   const totals = useMemo(() => {
@@ -76,9 +79,10 @@ export default function OrdersView({ clock: initialClock }) {
       const next = new Map(prev);
       for (const c of changes) {
         const s = data.students.find(x => x.id === c.student_id);
-        const variant = c.variant === 'default' ? defaultVariant(s, c.day, c.meal) : c.variant;
+        const away = c.variant === 'default' && absenceOn(data.absences, c.student_id, c.day);
+        const variant = away ? 'none' : c.variant === 'default' ? defaultVariant(s, c.day, c.meal) : c.variant;
         if (VARIANTS[c.meal].includes(variant) || variant === 'none') {
-          next.set(key(c.student_id, c.day, c.meal), { ...c, variant, source: c.variant === 'default' ? 'default' : 'manual' });
+          next.set(key(c.student_id, c.day, c.meal), { ...c, variant, source: away ? 'absence' : c.variant === 'default' ? 'default' : 'manual' });
         }
       }
       return next;
@@ -136,7 +140,7 @@ export default function OrdersView({ clock: initialClock }) {
         </select>
         <label className="search">
           <Search size={15} />
-          <input placeholder="Išči dijaka ali sobo" value={query} onChange={e => setQuery(e.target.value)} />
+          <input placeholder={data?.students.some(s => 'room' in s) ? 'Išči dijaka ali sobo' : 'Išči dijaka'} value={query} onChange={e => setQuery(e.target.value)} />
         </label>
         <div className="deadline">
           <Lock size={14} />
@@ -202,11 +206,11 @@ export default function OrdersView({ clock: initialClock }) {
                       return (
                         <td key={c.day + c.meal} className={`cell ${c.meal === 'B' ? 'day-start' : ''} ${locked ? 'locked' : ''}`}>
                           <button
-                            className={`chip v-${v} ${o?.source === 'manual' ? 'manual' : ''}`}
+                            className={`chip v-${v} ${o?.source === 'manual' ? 'manual' : ''} ${o?.source === 'absence' ? 'absent' : ''}`}
                             disabled={locked}
-                            title={cellTitle(s, c, v, o, data.menu)}
+                            title={cellTitle(s, c, v, o, data.menu, absenceOn(data.absences, s.id, c.day))}
                             onClick={e => openCell(e, s, c.day, c.meal)}
-                          >{VARIANT_SHORT[v]}</button>
+                          >{o?.source === 'absence' ? 'O' : VARIANT_SHORT[v]}</button>
                         </td>
                       );
                     })}
@@ -234,6 +238,18 @@ export default function OrdersView({ clock: initialClock }) {
           pop={pop}
           orders={orders}
           menu={data?.menu}
+          absence={absenceOn(data?.absences, pop.student.id, pop.day)}
+          onCancelAbsence={async a => {
+            setPop(null);
+            if (!confirm('Prekličem odsotnost? Dijak bo za odprte dni spet prijavljen po privzetem meniju.')) return;
+            try {
+              await api('cancelAbsence', { id: a.id });
+              setToast({ text: 'Odsotnost je preklicana, privzeti obroki so obnovljeni.' });
+            } catch (err) {
+              setToast({ error: true, text: err.message });
+            }
+            load();
+          }}
           selectedCount={selected.has(pop.student.id) ? selected.size : 0}
           onClose={() => setPop(null)}
           onPick={(variant, scope, everyone) => {
@@ -254,6 +270,12 @@ export default function OrdersView({ clock: initialClock }) {
           onClear={() => setSelected(new Set())}
           onApply={async params => {
             try {
+              if (params.variant === 'absence') {
+                const r = await api('addAbsence', { from: params.from, to: params.to, reason: params.reason, student_ids: [...selected] });
+                setToast({ text: `Odsotnost je vpisana za ${r.added} ${plural(r.added, 'dijaka', 'dijaka', 'dijake', 'dijakov')}.` });
+                load();
+                return;
+              }
               const r = await api('bulkOrders', { ...params, student_ids: [...selected] });
               setToast({ text: describeResult(r) });
               load();
@@ -271,7 +293,7 @@ export default function OrdersView({ clock: initialClock }) {
   );
 }
 
-function CellPopover({ pop, orders, menu, selectedCount, onClose, onPick }) {
+function CellPopover({ pop, orders, menu, absence, onCancelAbsence, selectedCount, onClose, onPick }) {
   const ref = useRef(null);
   const [everyone, setEveryone] = useState(false);
   const { student, day, meal } = pop;
@@ -297,6 +319,13 @@ function CellPopover({ pop, orders, menu, selectedCount, onClose, onPick }) {
         <strong>{everyone ? `Izbrani dijaki: ${selectedCount}` : studentName(student)}</strong>
         <span>{MEAL_NAMES[meal]} · {capitalize(fmtLong(day))}</span>
       </header>
+      {absence && !everyone && (
+        <div className="pop-absence">
+          <CalendarOff size={14} />
+          <span>Odsoten {fmtDay(absence.day_from)}{absence.day_to !== absence.day_from ? ` – ${fmtDay(absence.day_to)}` : ''}{absence.reason ? ` · ${absence.reason}` : ''}</span>
+          <button className="btn small ghost" onClick={() => onCancelAbsence(absence)}>Prekliči</button>
+        </div>
+      )}
       <div className="pop-options">
         {VARIANTS[meal].map(v => (
           <button key={v} className={`opt ${current === v && !everyone ? 'cur' : ''}`} onClick={() => onPick(v, 'meal', everyone)}>
@@ -323,9 +352,10 @@ function CellPopover({ pop, orders, menu, selectedCount, onClose, onPick }) {
   );
 }
 
-function cellTitle(s, c, v, o, menu) {
+function cellTitle(s, c, v, o, menu, absence) {
   const notes = [];
-  if (o?.source === 'manual') notes.push('ročno spremenjeno');
+  if (o?.source === 'absence') notes.push(`odsoten${absence?.reason ? ': ' + absence.reason : ''}`);
+  else if (o?.source === 'manual') notes.push('ročno spremenjeno');
   else if (weeklyVariant(s, c.day, c.meal)) notes.push('tedenska izjema');
   const dish = v !== 'none' && dishFor(menu, c.day, c.meal, v);
   return `${MEAL_NAMES[c.meal]} ${fmtDay(c.day)}: ${VARIANT_LABEL[v]}${notes.length ? ` (${notes.join(', ')})` : ''}${dish ? `\n${dish}` : ''}`;
@@ -336,7 +366,9 @@ function BulkBar({ count, defaultFrom, defaultTo, minDay, onApply, onClear }) {
   const [to, setTo] = useState(defaultTo);
   const [meals, setMeals] = useState(['B', 'L', 'D']);
   const [variant, setVariant] = useState('none');
+  const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const absence = variant === 'absence';
 
   useEffect(() => { setFrom(defaultFrom); setTo(defaultTo); }, [defaultFrom, defaultTo]);
 
@@ -347,22 +379,26 @@ function BulkBar({ count, defaultFrom, defaultTo, minDay, onApply, onClear }) {
       <div className="bulk-count"><CalendarRange size={16} />izbranih: <strong>{count}</strong></div>
       <label>Od<input type="date" value={from} min={minDay} onChange={e => setFrom(e.target.value)} /></label>
       <label>Do<input type="date" value={to} min={from} onChange={e => setTo(e.target.value)} /></label>
-      <div className="meal-toggles">
-        {MEALS.map(m => (
-          <button key={m} className={meals.includes(m) ? 'mt on' : 'mt'} onClick={() => toggleMeal(m)}>{MEAL_NAMES[m]}</button>
-        ))}
-      </div>
+      {!absence && (
+        <div className="meal-toggles">
+          {MEALS.map(m => (
+            <button key={m} className={meals.includes(m) ? 'mt on' : 'mt'} onClick={() => toggleMeal(m)}>{MEAL_NAMES[m]}</button>
+          ))}
+        </div>
+      )}
       <label>Nastavi na
         <select value={variant} onChange={e => setVariant(e.target.value)}>
+          <option value="absence">Odsotnost (vsi obroki)</option>
           <option value="none">Ni prijavljen (odjava)</option>
           <option value="default">Privzeti meni vsakega dijaka</option>
           {ALL_VARIANTS.map(v => <option key={v} value={v}>{VARIANT_LABEL[v]}{v === 'light' ? ' (samo večerja)' : v.includes('_') ? ' (kosilo in večerja)' : ''}</option>)}
         </select>
       </label>
+      {absence && <label>Razlog<input value={reason} onChange={e => setReason(e.target.value)} placeholder="npr. ekskurzija" /></label>}
       <button
         className="btn primary"
-        disabled={busy || !meals.length || !from || !to || to < from}
-        onClick={async () => { setBusy(true); await onApply({ from, to, meals, variant }); setBusy(false); }}
+        disabled={busy || (!absence && !meals.length) || !from || !to || to < from}
+        onClick={async () => { setBusy(true); await onApply({ from, to, meals, variant, reason }); setBusy(false); }}
       >{busy ? 'Shranjevanje …' : 'Uporabi'}</button>
       <button className="icon-btn" title="Počisti izbiro" onClick={onClear}><X size={18} /></button>
     </div>
@@ -376,6 +412,7 @@ function Legend() {
         <span key={v}><span className={`chip v-${v}`}>{VARIANT_SHORT[v]}</span>{VARIANT_LABEL[v]}</span>
       ))}
       <span><span className="chip v-normal manual">N</span>Ročno spremenjeno</span>
+      <span><span className="chip v-none absent">O</span>Odsoten</span>
       <span><span className="chip v-normal" style={{ opacity: 0.45 }}>N</span>Zaklenjeno</span>
     </div>
   );

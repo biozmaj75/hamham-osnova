@@ -390,3 +390,92 @@ table.weekly .no-meal { color: var(--muted); font-size: 12px; font-style: italic
   .menu-grid .sticky-col { position: static; }
 }
 .card-head .btn { white-space: nowrap; flex-shrink: 0; }
+
+/* ---------- users, rights, audit */
+.seg-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.seg button { border: none; background: transparent; padding: 6px 12px; cursor: pointer; color: var(--ink-2); font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button.on { background: var(--ink); color: var(--paper); }
+.list .sub { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.list tbody tr.static { cursor: default; }
+.list tbody tr.readonly { cursor: not-allowed; }
+.locked-tag { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-ink); font-weight: 600; font-size: 12.5px; }
+.row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+table.rights { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 4px 0 12px; }
+table.rights th, table.rights td { padding: 5px 4px; border-bottom: 1px solid var(--rule-soft); }
+table.rights thead th { font-family: var(--mono); font-weight: 500; font-size: 10.5px; text-transform: uppercase; color: var(--muted); }
+table.rights tbody th { text-align: left; font-weight: 400; }
+table.rights td { text-align: center; color: var(--accent); }
+ul.audit { list-style: none; padding: 0; margin: 0; max-height: 460px; overflow: auto; font-size: 12.5px; }
+ul.audit li { display: grid; grid-template-columns: 96px 1fr; gap: 0 10px; padding: 6px 0; border-bottom: 1px dotted var(--rule); }
+ul.audit li > :last-child { grid-column: 2; font-size: 11.5px; }
+.perm-field { border: 1px solid var(--rule); border-radius: var(--radius); padding: 8px 12px 10px; margin: 0; display: grid; gap: 6px; }
+.perm-field legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
+table.weekly.choices td { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 4px; }
+.choice { font-size: 13px; }
+.times-field { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.pad-x { padding: 0 24px 12px; }
+
+/* ---------- student form: login + absences */
+.side-box { margin-top: 16px; border: 1px solid var(--rule); border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 8px; background: #fffdf8; }
+.side-box h4 { display: flex; align-items: center; gap: 6px; font-size: 15px; }
+.side-box h4 .btn { margin-left: auto; }
+.side-box p { margin: 0; font-size: 13px; }
+.box-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.mono { font-family: var(--mono); }
+.absence-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.absence-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 500; }
+.absence-form .grow { flex: 1; min-width: 140px; }
+.absence-list { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+.absence-list li { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dotted var(--rule); }
+.absence-list li > :first-child { flex: 1; }
+.login-cell { font-size: 12.5px; font-family: var(--mono); }
+
+/* ---------- absences in grid, kitchen times */
+.chip.absent { background: repeating-linear-gradient(-45deg, #efe6d6 0 4px, #e2d6c1 4px 8px); color: var(--ink-2); border-color: #cdbfa7; }
+.pop-absence { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #f1ead9; font-size: 12.5px; border-bottom: 1px solid var(--rule-soft); }
+.pop-absence span { flex: 1; }
+.meal-time { display: block; font-family: var(--mono); font-size: 11.5px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+
+/* ---------- student: my meals */
+.my { padding: 0 0 40px; max-width: 1180px; width: 100%; margin: 0 auto; }
+.my-head { padding: 22px 24px 4px; }
+.my-head h1 { font-size: clamp(28px, 5vw, 40px); margin: 2px 0 8px; }
+.my-head .hint svg { vertical-align: -2px; }
+.my-nav { justify-content: space-between; }
+.my-days { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; padding: 0 24px; }
+.my-day { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; }
+.my-day.today { border-color: var(--ink); }
+.my-day.locked, .my-day.closed { background: #f6f1e7; box-shadow: none; }
+.my-day header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; }
+.my-day.locked header, .my-day.closed header { border-bottom-color: var(--rule); }
+.my-day h2 { font-size: 18px; }
+.my-day h2 span { font-family: var(--body); font-weight: 400; font-size: 13px; color: var(--muted); }
+.my-day .tag { margin: 0; display: inline-flex; align-items: center; gap: 3px; }
+.tag.away { background: #f1ead9; color: var(--accent-ink); }
+.my-meal { display: grid; gap: 4px; }
+.my-meal-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.my-meal-name { font-weight: 600; font-size: 14px; }
+.my-meal-name small { display: block; font-weight: 400; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.my-select { max-width: 150px; font-size: 13px; padding: 5px 6px; }
+.my-choice { font-size: 12.5px; color: var(--ink-2); }
+.my-dish { margin: 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.35; }
+.my-note { margin: 0; font-size: 11.5px; color: var(--accent-ink); }
+.my-bottom { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; padding: 20px 24px 0; align-items: start; }
+.my-card { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 18px; display: grid; gap: 10px; }
+.my-card h3 { display: flex; align-items: center; gap: 6px; font-size: 19px; }
+.my-card dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+.my-card dt { color: var(--muted); }
+.my-card dd { margin: 0; }
+@media (max-width: 1000px) {
+  .my-days { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .my-days { grid-template-columns: 1fr; padding: 0 12px; }
+  .my-head, .my-bottom { padding-left: 12px; padding-right: 12px; }
+  .my-nav { padding: 12px; }
+  .my-bottom { grid-template-columns: 1fr; }
+  .my-select { max-width: 180px; }
+  .student-shell .tab { padding: 0 8px; font-size: 13px; }
+}

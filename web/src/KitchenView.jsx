@@ -66,7 +66,7 @@ export default function KitchenView({ clock }) {
                   const total = VARIANTS[m].reduce((a, v) => a + (count[`${m}|${v}`] || 0), 0);
                   return (
                     <article key={m} className="meal-card">
-                      <header><h2>{MEAL_NAMES[m]}</h2><span className="big">{total}</span></header>
+                      <header><h2>{MEAL_NAMES[m]}{data.times?.[m] && <small className="meal-time">{data.times[m]}</small>}</h2><span className="big">{total}</span></header>
                       <table className="counts">
                         <tbody>
                           {VARIANTS[m].map(v => (
@@ -84,8 +84,8 @@ export default function KitchenView({ clock }) {
               </section>
 
               <section className="lists">
-                <PeopleList title="Suhi obroki (paketi)" rows={data.dry} />
-                <PeopleList title="Pozni obroki (shranjeni)" rows={data.late} />
+                <PeopleList title="Suhi obroki (paketi)" time={data.times?.dry} rows={data.dry} />
+                <PeopleList title="Pozni obroki (shranjeni)" time={data.times?.late} rows={data.late} />
                 <DietList rows={data.diets} />
               </section>
             </>
@@ -114,7 +114,7 @@ function DietList({ rows }) {
         {people.map(p => (
           <li key={p.id}>
             <span><span className="nm">{studentName(p)}</span> <span className="diet-text">{p.diet}</span></span>
-            <span className="meta">{[p.group_name, p.room].filter(Boolean).join(' · ')}</span>
+            <span className="meta">{p.group_name}</span>
             <span className="diet-meals">
               {MEALS.filter(m => p.meals[m]).map(m => (
                 <span key={m}>{MEAL_NAMES[m]} <span className={`chip v-${p.meals[m]}`}>{VARIANT_SHORT[p.meals[m]]}</span></span>
@@ -127,11 +127,11 @@ function DietList({ rows }) {
   );
 }
 
-function PeopleList({ title, rows, showDiet }) {
+function PeopleList({ title, time, rows, showDiet }) {
   const byMeal = MEALS.map(m => [m, rows.filter(r => r.meal === m)]).filter(([, r]) => r.length);
   return (
     <article className="people">
-      <header><h3>{title}</h3><span className="count">{rows.length}</span></header>
+      <header><h3>{title}{time && <small className="meal-time">{time}</small>}</h3><span className="count">{rows.length}</span></header>
       {byMeal.length === 0 && <p className="muted">Ni.</p>}
       {byMeal.map(([m, list]) => (
         <div key={m} className="people-meal">
@@ -141,7 +141,7 @@ function PeopleList({ title, rows, showDiet }) {
               <li key={r.id + r.meal}>
                 <span className={`chip v-${r.variant}`}>{VARIANT_SHORT[r.variant]}</span>
                 <span className="nm">{studentName(r)}</span>
-                <span className="meta">{[r.group_name, r.room].filter(Boolean).join(' · ')}</span>
+                <span className="meta">{r.group_name}</span>
                 {showDiet && <span className="diet-text">{r.diet}</span>}
               </li>
             ))}
