@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, Trash2 } from 'lucide-react';
+import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2 } from 'lucide-react';
 import { api } from './api.js';
 import { readXlsx, excelDate } from './xlsx.js';
 import Modal from './Modal.jsx';
@@ -44,6 +44,7 @@ export default function StudentsView({ me }) {
   const [group, setGroup] = useState(myGroups.length ? '@mine' : '');
   const [editing, setEditing] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [weeklyBulk, setWeeklyBulk] = useState(false);
   const [error, setError] = useState('');
 
   const load = () => api('students').then(r => { setStudents(r.students); setFull(r.full); }).catch(err => setError(err.message));
@@ -72,6 +73,7 @@ export default function StudentsView({ me }) {
         <label className="search"><Search size={15} /><input placeholder={full ? 'Išči ime, skupino, sobo, dieto' : 'Išči ime, skupino, dieto'} value={query} onChange={e => setQuery(e.target.value)} /></label>
         <label className="inline-check"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Prikaži izseljene</label>
         {full && <button className="btn" onClick={() => setLogins(true)}><KeyRound size={16} /> Dostopi za dijake</button>}
+        {full && <button className="btn" onClick={() => setWeeklyBulk(true)}><CalendarClock size={16} /> Stalne izjeme</button>}
         {full && <button className="btn" onClick={() => setImporting(true)}><Upload size={16} /> Uvozi seznam</button>}
         {full && <button className="btn primary" onClick={() => setEditing({ ...EMPTY })}><Plus size={16} /> Dodaj dijaka</button>}
       </div>
@@ -106,6 +108,8 @@ export default function StudentsView({ me }) {
           onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} onChanged={load} />
       )}
       {logins && <LoginsDialog students={students.filter(s => s.active)} groups={groups} initialGroup={group === '@mine' ? myGroups[0] || '' : group} me={me} onClose={() => { setLogins(false); load(); }} />}
+      {weeklyBulk && <WeeklyDialog students={students.filter(s => s.active)} groups={groups} initialGroup={group === '@mine' ? myGroups[0] || '' : group}
+        onClose={() => setWeeklyBulk(false)} onDone={() => { setWeeklyBulk(false); load(); }} />}
       {importing && <ImportDialog me={me} onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(); }} />}
     </div>
   );
@@ -526,6 +530,117 @@ function AbsenceBox({ student }) {
 }
 
 // Logins for a whole group at once: new accounts, or new passwords for everyone in the group
+// Standing weekday exception for many students at once, set once for the whole school year
+const WEEKLY_CHOICES = [
+  ['none', 'Odjava (ni prijavljen)'],
+  ['dry', 'Suh obrok (vegetarijanci dobijo vegetarijanskega)'],
+  ['', 'Brez izjeme – kot privzeti meni'],
+];
+
+function WeeklyDialog({ students, groups, initialGroup, onClose, onDone }) {
+  const [day, setDay] = useState(5);
+  const [meals, setMeals] = useState(['B', 'L']);
+  const [variant, setVariant] = useState('none');
+  const [group, setGroup] = useState(initialGroup || '');
+  const [picked, setPicked] = useState(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(null);
+
+  const dayMeals = meals.filter(m => !(day === 5 && m === 'D') && !(variant === 'dry' && m === 'B'));
+  const inGroup = students.filter(s => !group || s.group_name === group);
+  const target = students.filter(s => picked.has(s.id));
+  const toggle = id => setPicked(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allPicked = inGroup.length > 0 && inGroup.every(s => picked.has(s.id));
+  const pickAll = on => setPicked(prev => { const n = new Set(prev); inGroup.forEach(s => (on ? n.add(s.id) : n.delete(s.id))); return n; });
+  const current = s => dayMeals.map(m => s.weekly?.[day]?.[m]).filter(Boolean).map(v => VARIANT_LABEL[v].toLowerCase());
+
+  async function run() {
+    setBusy(true);
+    setError('');
+    try {
+      setDone(await api('setWeekly', { student_ids: target.map(s => s.id), day, meals: dayMeals, variant }));
+    } catch (err) {
+      setError(err.message);
+    }
+    setBusy(false);
+  }
+
+  const dayName = WEEKDAYS.find(([n]) => n === day)[1];
+  return (
+    <Modal title="Stalne tedenske izjeme" onClose={done ? onDone : onClose} wide>
+      {done ? (
+        <div className="form">
+          <p className="success">Izjema je nastavljena pri {done.changed} {plural(done.changed, 'dijaku', 'dijakih', 'dijakih', 'dijakih')}{done.changed < done.total ? ` (pri ${done.total - done.changed} je bila že enaka)` : ''}. Velja vsak {dayName} do konca šolskega leta.</p>
+          <p className="hint">Dnevi, ki ste jih pri dijaku ročno spremenili, ostanejo, kot so.</p>
+          <div className="form-actions"><button className="btn primary" onClick={onDone}>Zapri</button></div>
+        </div>
+      ) : (
+        <div className="form weekly-bulk">
+          <p className="hint">Nastavite enkrat za celo šolsko leto – na primer odjava vsak petek ali suho kosilo vsako sredo. Posamezne dni lahko kasneje še vedno spremenite v prijavah.</p>
+          <div className="weekly-bulk-row">
+            <label>Dan
+              <select value={day} onChange={e => setDay(Number(e.target.value))}>
+                {WEEKDAYS.map(([n, name]) => <option key={n} value={n}>vsak {name}</option>)}
+              </select>
+            </label>
+            <fieldset>
+              <legend>Obroki</legend>
+              {MEALS.map(m => {
+                const off = (day === 5 && m === 'D') || (variant === 'dry' && m === 'B');
+                return (
+                  <label key={m} className={`inline-check${off ? ' muted' : ''}`}>
+                    <input type="checkbox" disabled={off} checked={!off && meals.includes(m)}
+                      onChange={e => setMeals(prev => (e.target.checked ? [...prev, m] : prev.filter(x => x !== m)))} /> {MEAL_NAMES[m]}
+                  </label>
+                );
+              })}
+            </fieldset>
+            <fieldset>
+              <legend>Kaj</legend>
+              {WEEKLY_CHOICES.map(([v, label]) => (
+                <label key={v} className="inline-check"><input type="radio" name="wv" checked={variant === v} onChange={() => setVariant(v)} /> {label}</label>
+              ))}
+            </fieldset>
+          </div>
+          <div className="weekly-bulk-pick">
+            <div className="weekly-bulk-head">
+              <select value={group} onChange={e => setGroup(e.target.value)}>
+                <option value="">Vse skupine</option>
+                {groups.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+              <label className="inline-check"><input type="checkbox" checked={allPicked} onChange={e => pickAll(e.target.checked)} /> Izberi vse ({inGroup.length})</label>
+              <span className="muted">Izbranih: {target.length}</span>
+            </div>
+            <ul className="pick-list">
+              {inGroup.map(s => {
+                const cur = current(s);
+                return (
+                  <li key={s.id}>
+                    <label className="inline-check">
+                      <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} />
+                      <span>{studentName(s)} <span className="muted">{s.group_name}</span></span>
+                      {cur.length > 0 && <em className="tag">zdaj: {cur.join(', ')}</em>}
+                    </label>
+                  </li>
+                );
+              })}
+              {inGroup.length === 0 && <li className="muted">V tej skupini ni dijakov.</li>}
+            </ul>
+          </div>
+          {error && <p className="error">{error}</p>}
+          <div className="form-actions">
+            <button className="btn ghost" onClick={onClose}>Prekliči</button>
+            <button className="btn primary" disabled={busy || !target.length || !dayMeals.length} onClick={run}>
+              {busy ? 'Shranjevanje …' : `Nastavi za ${target.length} ${plural(target.length, 'dijaka', 'dijaka', 'dijake', 'dijakov')}`}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function LoginsDialog({ students, groups, initialGroup, me, onClose }) {
   const [group, setGroup] = useState(initialGroup || '');
   const [mode, setMode] = useState('missing');

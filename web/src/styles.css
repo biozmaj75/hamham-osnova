@@ -493,3 +493,13 @@ table.weekly.choices td { display: flex; flex-wrap: wrap; gap: 4px 14px; padding
 table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13px; }
 .import-summary { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-size: 13.5px; }
 .form > .seg { justify-self: start; align-self: start; }
+
+/* Standing weekday exceptions for many students */
+.weekly-bulk-row { display: grid; grid-template-columns: auto 1fr 2fr; gap: 16px; align-items: start; }
+.weekly-bulk-row fieldset { border: 1px solid var(--rule); border-radius: var(--radius); padding: 8px 12px 10px; margin: 0; display: grid; gap: 6px; }
+.weekly-bulk-row legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
+.weekly-bulk-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.pick-list { list-style: none; margin: 0; padding: 6px 10px; border: 1px solid var(--rule); border-radius: var(--radius); max-height: 300px; overflow-y: auto; columns: 2 260px; }
+.pick-list li { break-inside: avoid; padding: 3px 0; }
+.pick-list .tag { margin-left: 4px; }
+@media (max-width: 700px) { .weekly-bulk-row { grid-template-columns: 1fr; } }

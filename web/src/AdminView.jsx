@@ -37,6 +37,7 @@ const ACTION_LABEL = {
   'student.create': 'Nov dijak',
   'student.update': 'Sprememba dijaka',
   'student.import': 'Uvoz dijakov',
+  'student.weekly': 'Stalna izjema',
   'student.password': 'Dostop za dijaka',
   'absence.add': 'Odsotnost',
   'absence.cancel': 'Preklic odsotnosti',

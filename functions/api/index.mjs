@@ -681,6 +681,40 @@ const actions = {
     return { summary };
   },
 
+  // Standing weekday exception for many students at once, e.g. no meals on Fridays or a dry lunch every Wednesday:
+  // { student_ids, day: 1–5, meals: ['B','L','D'], variant } — variant 'dry' keeps a vegetarian student vegetarian,
+  // '' removes the exception. Future days nobody changed by hand follow it to the end of the school year.
+  async setWeekly(b, user, ck) {
+    requireRight(user, 'students');
+    const ids = (b.student_ids || []).map(Number).filter(Boolean);
+    const day = Number(b.day);
+    const meals = MEALS.filter(m => (b.meals || []).includes(m) && !(day === 5 && m === 'D'));
+    const variant = String(b.variant || '');
+    if (!ids.length || ids.length > 500) throw new HttpError(400, 'Izberite dijake');
+    if (!(day >= 1 && day <= 5) || !meals.length) throw new HttpError(400, 'Izberite dan in obrok');
+    if (variant && variant !== 'dry' && !meals.every(m => validVariant(m, variant))) throw new HttpError(400, 'Ta izbira ni mogoča za izbrani obrok');
+    if (variant === 'dry' && meals.includes('B')) throw new HttpError(400, 'Suhi obrok je mogoč le pri kosilu in večerji');
+    const { rows: students } = await getPool().query('select * from students where id = any($1::int[]) and active', [ids]);
+    const vegetarian = v => ['veg', 'dry_veg', 'late_veg'].includes(v);
+    let changed = 0;
+    for (const s of students) {
+      const weekly = structuredClone(s.weekly || {});
+      const days = (weekly[day] ||= {});
+      for (const m of meals) {
+        if (!variant) delete days[m];
+        else days[m] = variant === 'dry' ? (vegetarian(s[DEF_COL[m]]) ? 'dry_veg' : 'dry_normal') : variant;
+      }
+      if (!Object.keys(days).length) delete weekly[day];
+      if (JSON.stringify(weekly) === JSON.stringify(s.weekly || {})) continue;
+      await saveStudent(ck, { ...s, weekly }, user.id);
+      changed++;
+    }
+    const DAY_NAMES = ['', 'ponedeljek', 'torek', 'sreda', 'četrtek', 'petek'];
+    const what = !variant ? 'brez izjeme' : variant === 'dry' ? 'suh obrok' : variant;
+    await audit(user, 'student.weekly', `${DAY_NAMES[day]} ${meals.join('+')}: ${what}, dijakov ${changed}`);
+    return { changed, total: students.length };
+  },
+
   async studentLog(b, user) {
     requireRight(user, 'orders');
     const { rows } = await getPool().query(`
