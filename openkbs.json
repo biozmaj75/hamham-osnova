@@ -2,7 +2,7 @@
   "projectId": "6d9db7d32964",
   "region": "eu-central-1",
   "backend": "elastic",
-  "postgres": false,
+  "postgres": true,
   "storage": { "cloudfront": "media" },
   "mqtt": false,
   "functions": [
