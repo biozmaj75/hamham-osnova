@@ -106,6 +106,8 @@ alter table users add column if not exists must_change boolean not null default 
 alter table users add column if not exists last_login timestamptz;
 -- Extra rights granted to a single account on top of its role, e.g. {menu}
 alter table users add column if not exists perms text[] not null default '{}';
+-- Educational groups a teacher looks after; their students are shown first, the whole home stays visible
+alter table users add column if not exists groups text[] not null default '{}';
 
 alter table users drop constraint if exists users_role_check;
 alter table users add constraint users_role_check

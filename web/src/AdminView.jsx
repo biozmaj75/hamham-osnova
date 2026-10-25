@@ -87,7 +87,7 @@ export function UsersView({ me }) {
             <p className="muted">Vloge določajo, kaj kdo vidi. Zaklenjen račun se ne more prijaviti, podatki pa ostanejo.</p>
           </div>
           {show === 'staff' && (
-            <button className="btn primary" onClick={() => setEditing({ username: '', name: '', role: 'teacher', password: '', active: true, perms: [] })}>
+            <button className="btn primary" onClick={() => setEditing({ username: '', name: '', role: 'teacher', password: '', active: true, perms: [], groups: [] })}>
               <Plus size={16} /> Dodaj račun
             </button>
           )}
@@ -108,10 +108,11 @@ export function UsersView({ me }) {
                 const locked = u.role === 'admin' && !isAdmin;
                 return (
                   <tr key={u.id} className={`${u.active ? '' : 'inactive'} ${locked ? 'readonly' : ''}`}
-                    onClick={() => !locked && setEditing({ ...u, password: '', perms: u.perms || [] })}
+                    onClick={() => !locked && setEditing({ ...u, password: '', perms: u.perms || [], groups: u.groups || [] })}
                     title={locked ? 'Skrbniške račune ureja samo skrbnik' : ''}>
                     <td><strong>{u.name}</strong>{u.id === me.user.id && <em className="tag">vi</em>}<div className="sub">{u.username}</div></td>
-                    <td>{ROLE_NAME[u.role]}{(u.perms || []).length > 0 && <em className="tag" title={(u.perms || []).map(p => RIGHT_LABEL[p]).join('\n')}>+{u.perms.length} {u.perms.length === 1 ? 'pravica' : 'pravice'}</em>}</td>
+                    <td>{ROLE_NAME[u.role]}{(u.perms || []).length > 0 && <em className="tag" title={(u.perms || []).map(p => RIGHT_LABEL[p]).join('\n')}>+{u.perms.length} {u.perms.length === 1 ? 'pravica' : 'pravice'}</em>}
+                      {u.role === 'teacher' && <div className="sub">{(u.groups || []).length ? `skupine: ${u.groups.join(', ')}` : 'brez skupine'}</div>}</td>
                     <td className="muted">{fmtTime(u.last_login)}{u.must_change && <em className="tag">začasno geslo</em>}</td>
                     <td>{u.active ? 'Aktiven' : <span className="locked-tag"><Lock size={12} /> Zaklenjen</span>}</td>
                   </tr>
@@ -140,7 +141,7 @@ export function UsersView({ me }) {
           </table>
         )}
         {editing && (
-          <UserForm user={editing} me={me} extraRights={data?.extraRights || []}
+          <UserForm user={editing} me={me} extraRights={data?.extraRights || []} groups={data?.groups || []}
             onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
         )}
       </section>
@@ -152,13 +153,21 @@ export function UsersView({ me }) {
   );
 }
 
-function UserForm({ user, me, extraRights, onClose, onSaved }) {
+function UserForm({ user, me, extraRights, groups, onClose, onSaved }) {
   const [u, setU] = useState(user);
   const [error, setError] = useState('');
   const set = (k, v) => setU(p => ({ ...p, [k]: v }));
   const self = user.id === me.user.id;
   const roles = STAFF_ROLES.filter(r => r !== 'admin' || me.user.role === 'admin');
   const extras = extraRights.filter(p => !ROLE_RIGHTS[p].includes(u.role));
+  const [newGroup, setNewGroup] = useState('');
+  const allGroups = [...new Set([...groups, ...u.groups])].sort((a, b) => a.localeCompare(b, 'sl', { numeric: true }));
+  const toggleGroup = (g, on) => set('groups', on ? [...u.groups, g] : u.groups.filter(x => x !== g));
+  function addGroup() {
+    const g = newGroup.trim();
+    if (g && !u.groups.includes(g)) set('groups', [...u.groups, g]);
+    setNewGroup('');
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -180,6 +189,21 @@ function UserForm({ user, me, extraRights, onClose, onSaved }) {
             {roles.map(r => <option key={r} value={r}>{ROLE_NAME[r]}</option>)}
           </select>
         </label>
+        {u.role === 'teacher' && (
+          <fieldset className="perm-field">
+            <legend>Vzgojne skupine <small>ob prijavi vidi najprej svoje dijake, ostale pa na zahtevo</small></legend>
+            {allGroups.map(g => (
+              <label key={g} className="inline-check">
+                <input type="checkbox" checked={u.groups.includes(g)} onChange={e => toggleGroup(g, e.target.checked)} /> {g}
+              </label>
+            ))}
+            <div className="add-group">
+              <input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="Druga skupina, npr. 3. skupina"
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addGroup(); } }} />
+              <button type="button" className="btn small" onClick={addGroup} disabled={!newGroup.trim()}>Dodaj</button>
+            </div>
+          </fieldset>
+        )}
         {extras.length > 0 && (
           <fieldset className="perm-field">
             <legend>Dodatne pravice <small>samo za ta račun, poleg pravic vloge</small></legend>

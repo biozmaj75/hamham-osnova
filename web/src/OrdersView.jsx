@@ -21,9 +21,12 @@ function describeResult(r) {
   return parts.join(' · ');
 }
 
-export default function OrdersView({ clock: initialClock }) {
+export default function OrdersView({ clock: initialClock, me }) {
   const [week, setWeek] = useState(() => startWeek(initialClock.firstEditable));
-  const [group, setGroup] = useState(() => localStorage.getItem('orders-group') || '');
+  const myGroups = me?.user?.groups || [];
+  const groupKey = `orders-group-${me?.user?.id}`;
+  const [group, setGroup] = useState(() => localStorage.getItem(groupKey) ?? (myGroups.length ? '@mine' : ''));
+  const oneGroup = group && group !== '@mine';
   const [query, setQuery] = useState('');
   const [data, setData] = useState(null);
   const [orders, setOrders] = useState(new Map());
@@ -49,7 +52,7 @@ export default function OrdersView({ clock: initialClock }) {
   }, [week, group]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { localStorage.setItem('orders-group', group); }, [group]);
+  useEffect(() => { localStorage.setItem(groupKey, group); }, [group]);
 
   useEffect(() => {
     if (!toast) return;
@@ -135,7 +138,8 @@ export default function OrdersView({ clock: initialClock }) {
           <button className="btn ghost small" onClick={() => setWeek(startWeek(clock.firstEditable))}>Prvi odprti teden</button>
         </div>
         <select value={group} onChange={e => { setGroup(e.target.value); setSelected(new Set()); }}>
-          <option value="">Vse skupine</option>
+          {myGroups.length > 0 && <option value="@mine">Moje skupine ({myGroups.join(', ')})</option>}
+          <option value="">Cel dom – vse skupine</option>
           {(data?.groups || []).map(g => <option key={g.group_name} value={g.group_name}>{g.group_name || '(brez skupine)'} · {g.n}</option>)}
         </select>
         <label className="search">
@@ -181,7 +185,7 @@ export default function OrdersView({ clock: initialClock }) {
             </thead>
             <tbody>
               {students.map(s => {
-                const header = !group && s.group_name !== lastGroup;
+                const header = !oneGroup && s.group_name !== lastGroup;
                 lastGroup = s.group_name;
                 return [
                   header && (
@@ -223,7 +227,7 @@ export default function OrdersView({ clock: initialClock }) {
             </tbody>
             <tfoot>
               <tr>
-                <td className="sticky-col">Prijavljenih{group ? ' v skupini' : ''}</td>
+                <td className="sticky-col">Prijavljenih{oneGroup ? ' v skupini' : group === '@mine' ? ' v mojih skupinah' : ''}</td>
                 {columns.map(c => <td key={c.day + c.meal} className={c.meal === 'B' ? 'day-start' : ''}>{totals[`${c.day}|${c.meal}`] || 0}</td>)}
               </tr>
             </tfoot>

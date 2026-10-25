@@ -202,7 +202,7 @@ async function currentUser(event, secret) {
   const payload = verifyToken(header.replace(/^Bearer\s+/i, ''), secret);
   if (!payload) return null;
   const { rows } = await getPool().query(`
-    select u.id, u.username, u.name, u.role, u.student_id, u.must_change, u.perms, u.pw_hash
+    select u.id, u.username, u.name, u.role, u.student_id, u.must_change, u.perms, u.groups, u.pw_hash
     from users u left join students s on s.id = u.student_id
     where u.id = $1 and u.active and (u.role <> 'student' or s.active)`, [payload.uid]);
   const u = rows[0];
@@ -543,9 +543,11 @@ const actions = {
     await horizon(ck);
     await materialize(ck, days[days.length - 1]);
     const db = getPool();
+    // group: one group name, '@mine' = the teacher's own groups, empty = the whole home
+    const only = b.group === '@mine' ? (user.groups || []) : b.group ? [b.group] : null;
     const params = [];
     let where = 'where active';
-    if (b.group) { params.push(b.group); where += ` and group_name = $${params.length}`; }
+    if (only) { params.push(only); where += ` and group_name = any($${params.length}::text[])`; }
     const cols = can(user, 'students') ? 'room, ' : '';
     const { rows: students } = await db.query(
       `select id, first_name, last_name, group_name, ${cols}diet, def_b, def_l, def_d, weekly from students ${where}
@@ -553,8 +555,8 @@ const actions = {
     const { rows: orders } = await db.query(`
       select o.student_id, o.day, o.meal::text as meal, o.variant, o.source
       from orders o join students s on s.id = o.student_id
-      where o.day between $1 and $2 and s.active ${b.group ? 'and s.group_name = $3' : ''}`,
-      b.group ? [b.from, b.to, b.group] : [b.from, b.to]);
+      where o.day between $1 and $2 and s.active ${only ? 'and s.group_name = any($3::text[])' : ''}`,
+      only ? [b.from, b.to, only] : [b.from, b.to]);
     const { rows: groups } = await db.query(
       `select group_name, count(*)::int as n from students where active group by group_name order by group_name`);
     const { rows: absences } = await db.query(
@@ -785,10 +787,12 @@ const actions = {
   async users(b, user) {
     requireRight(user, 'users');
     const { rows } = await getPool().query(`
-      select u.id, u.username, u.name, u.role, u.active, u.perms, u.must_change, u.last_login, u.created_at, s.group_name
+      select u.id, u.username, u.name, u.role, u.active, u.perms, u.groups, u.must_change, u.last_login, u.created_at, s.group_name
       from users u left join students s on s.id = u.student_id
       order by u.role = 'student', u.role, u.name`);
-    return { users: rows, extraRights: EXTRA_RIGHTS };
+    const { rows: groups } = await getPool().query(
+      `select distinct group_name from students where active and group_name <> '' order by group_name`);
+    return { users: rows, extraRights: EXTRA_RIGHTS, groups: groups.map(g => g.group_name) };
   },
 
   // Staff accounts. Only an administrator can create or change administrators.
@@ -815,21 +819,25 @@ const actions = {
     if (!STAFF_ROLES.includes(u.role)) throw new HttpError(400, 'Neveljavna vloga');
     if (u.password && String(u.password).length < 8) throw new HttpError(400, 'Geslo mora imeti vsaj 8 znakov');
     const perms = (Array.isArray(u.perms) ? u.perms : []).filter(p => EXTRA_RIGHTS.includes(p) && !RIGHTS[p].includes(u.role));
+    const groups = u.role === 'teacher'
+      ? [...new Set((Array.isArray(u.groups) ? u.groups : []).map(g => String(g).trim()).filter(Boolean))].slice(0, 20)
+      : [];
     const active = u.active !== false;
     if (old && old.id === user.id && (u.role !== old.role || !active)) throw new HttpError(400, 'Svoje vloge ali zaklepanja ne morete spremeniti sami');
     try {
       if (!old) {
         if (!u.password) throw new HttpError(400, 'Geslo je obvezno');
-        await db.query('insert into users (username, name, role, pw_hash, perms, must_change) values ($1,$2,$3,$4,$5,true)',
-          [username, name, u.role, hashPassword(u.password), perms]);
-        await audit(user, 'user.create', `${username} (${u.role})`);
+        await db.query('insert into users (username, name, role, pw_hash, perms, groups, must_change) values ($1,$2,$3,$4,$5,$6,true)',
+          [username, name, u.role, hashPassword(u.password), perms, groups]);
+        await audit(user, 'user.create', `${username} (${u.role}${groups.length ? ', skupine ' + groups.join(', ') : ''})`);
       } else {
-        await db.query('update users set username=$2, name=$3, role=$4, active=$5, perms=$6 where id=$1',
-          [old.id, username, name, u.role, active, perms]);
+        await db.query('update users set username=$2, name=$3, role=$4, active=$5, perms=$6, groups=$7 where id=$1',
+          [old.id, username, name, u.role, active, perms, groups]);
         const changes = [];
         if (old.role !== u.role) changes.push(`vloga ${old.role} → ${u.role}`);
         if (old.active !== active) changes.push(active ? 'odklenjen' : 'zaklenjen');
         if ((old.perms || []).join() !== perms.join()) changes.push(`dodatne pravice: ${perms.join(', ') || '—'}`);
+        if ((old.groups || []).join() !== groups.join()) changes.push(`skupine: ${groups.join(', ') || '—'}`);
         if (u.password) {
           await db.query('update users set pw_hash=$2, must_change=true where id=$1', [old.id, hashPassword(u.password)]);
           changes.push('novo geslo');

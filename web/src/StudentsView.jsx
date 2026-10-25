@@ -39,6 +39,8 @@ export default function StudentsView({ me }) {
   const [logins, setLogins] = useState(false);
   const [query, setQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
+  const myGroups = me.user.groups || [];
+  const [group, setGroup] = useState(myGroups.length ? '@mine' : '');
   const [editing, setEditing] = useState(null);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
@@ -50,9 +52,10 @@ export default function StudentsView({ me }) {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (students || []).filter(s => (showInactive || s.active)
+    const inGroup = s => !group || (group === '@mine' ? myGroups.includes(s.group_name) : s.group_name === group);
+    return (students || []).filter(s => (showInactive || s.active) && inGroup(s)
       && (!q || `${s.first_name} ${s.last_name} ${s.group_name} ${s.room || ''} ${s.diet}`.toLowerCase().includes(q)));
-  }, [students, query, showInactive]);
+  }, [students, query, showInactive, group]);
 
   const activeCount = (students || []).filter(s => s.active).length;
 
@@ -60,6 +63,11 @@ export default function StudentsView({ me }) {
     <div className="students">
       <div className="toolbar">
         <div className="title-block"><h1>Dijaki</h1><span className="muted">{activeCount} {plural(activeCount, 'dijak', 'dijaka', 'dijaki', 'dijakov')} v domu</span></div>
+        <select value={group} onChange={e => setGroup(e.target.value)}>
+          {myGroups.length > 0 && <option value="@mine">Moji dijaki ({myGroups.join(', ')})</option>}
+          <option value="">Cel dom – vse skupine</option>
+          {groups.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
         <label className="search"><Search size={15} /><input placeholder={full ? 'Išči ime, skupino, sobo, dieto' : 'Išči ime, skupino, dieto'} value={query} onChange={e => setQuery(e.target.value)} /></label>
         <label className="inline-check"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Prikaži izseljene</label>
         {full && <button className="btn" onClick={() => setLogins(true)}><KeyRound size={16} /> Dostopi za dijake</button>}
@@ -96,7 +104,7 @@ export default function StudentsView({ me }) {
         <StudentForm student={editing} groups={groups} full={full} me={me}
           onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} onChanged={load} />
       )}
-      {logins && <LoginsDialog students={students.filter(s => s.active)} groups={groups} me={me} onClose={() => { setLogins(false); load(); }} />}
+      {logins && <LoginsDialog students={students.filter(s => s.active)} groups={groups} initialGroup={group === '@mine' ? myGroups[0] || '' : group} me={me} onClose={() => { setLogins(false); load(); }} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(); }} />}
     </div>
   );
@@ -385,8 +393,8 @@ function AbsenceBox({ student }) {
 }
 
 // Logins for a whole group at once: new accounts, or new passwords for everyone in the group
-function LoginsDialog({ students, groups, me, onClose }) {
-  const [group, setGroup] = useState('');
+function LoginsDialog({ students, groups, initialGroup, me, onClose }) {
+  const [group, setGroup] = useState(initialGroup || '');
   const [mode, setMode] = useState('missing');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);

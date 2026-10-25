@@ -71,7 +71,7 @@ export default function App() {
       <main className="main">
         {!active && <p className="muted pad">Vaš račun nima dostopa do nobenega dela aplikacije. Obrnite se na skrbnika.</p>}
         {active?.id === 'my' && <MyMealsView me={me} />}
-        {active?.id === 'orders' && <OrdersView clock={me.clock} />}
+        {active?.id === 'orders' && <OrdersView clock={me.clock} me={me} />}
         {active?.id === 'menu' && <MenuView clock={me.clock} canEdit={has('menu')} />}
         {active?.id === 'kitchen' && <KitchenView clock={me.clock} />}
         {active?.id === 'students' && <StudentsView me={me} />}
