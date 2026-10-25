@@ -31,7 +31,7 @@ create table if not exists users (
   id serial primary key,
   username text not null unique,
   name text not null,
-  role text not null check (role in ('admin', 'teacher', 'kitchen')),
+  role text not null,
   pw_hash text not null,
   active boolean not null default true,
   created_at timestamptz not null default now()
@@ -82,12 +82,31 @@ create table if not exists closed_days (
   day date primary key,
   reason text not null default ''
 );
+
+-- Dishes per day, meal and variant, entered by the menu planner
+create table if not exists menus (
+  day date not null,
+  meal char(1) not null check (meal in ('B', 'L', 'D')),
+  variant text not null,
+  dish text not null,
+  updated_by int references users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  primary key (day, meal, variant)
+);
+
+-- Weekday exceptions to the default menu: {"3": {"L": "dry_normal"}} = dry lunch every Wednesday
+alter table students add column if not exists weekly jsonb not null default '{}';
+
+alter table users drop constraint if exists users_role_check;
+alter table users add constraint users_role_check check (role in ('admin', 'teacher', 'dietitian', 'kitchen'));
 `;
 
 const DEFAULT_SETTINGS = {
   timezone: 'Europe/Ljubljana',
   cutoff_hour: '18',
   materialized_through: '',
+  school_year_start: '',
+  school_year_end: '',
 };
 
 export async function init() {

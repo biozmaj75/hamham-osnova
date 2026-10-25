@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Upload, Search, Leaf, History } from 'lucide-react';
 import { api } from './api.js';
 import Modal from './Modal.jsx';
-import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, fmtDay, studentName, plural } from './meals.js';
+import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, WEEKDAYS, DEF_COL, fmtDay, studentName, plural } from './meals.js';
+const EMPTY = { first_name: '', last_name: '', group_name: '', room: '', diet: '', notes: '', def_b: 'normal', def_l: 'normal', def_d: 'normal', weekly: {}, active: true };
 
-const DEF_COL = { B: 'def_b', L: 'def_l', D: 'def_d' };
-const EMPTY = { first_name: '', last_name: '', group_name: '', room: '', diet: '', notes: '', def_b: 'normal', def_l: 'normal', def_d: 'normal', active: true };
+// [[weekday name, meal, variant]] for a student's weekday exceptions
+function exceptions(s) {
+  return WEEKDAYS.flatMap(([n, name]) => MEALS.filter(m => s.weekly?.[n]?.[m]).map(m => [name, m, s.weekly[n][m]]));
+}
 
 export default function StudentsView() {
   const [students, setStudents] = useState(null);
@@ -50,6 +53,7 @@ export default function StudentsView() {
                   <td>{s.room}</td>
                   <td className="defaults">
                     {MEALS.map(m => <span key={m} title={`${MEAL_NAMES[m]}: ${VARIANT_LABEL[s[DEF_COL[m]]]}`} className={`chip v-${s[DEF_COL[m]]}`}>{VARIANT_SHORT[s[DEF_COL[m]]]}</span>)}
+                    <ExceptionTag student={s} />
                   </td>
                   <td>{s.diet && <span className="diet"><Leaf size={11} />{s.diet}</span>}</td>
                   <td className="muted right">Uredi</td>
@@ -66,12 +70,26 @@ export default function StudentsView() {
   );
 }
 
+function ExceptionTag({ student }) {
+  const list = exceptions(student);
+  if (!list.length) return null;
+  const title = list.map(([day, m, v]) => `${day}: ${MEAL_NAMES[m].toLowerCase()} ${VARIANT_LABEL[v].toLowerCase()}`).join('\n');
+  return <em className="tag" title={title}>+{list.length} {plural(list.length, 'izjema', 'izjemi', 'izjeme', 'izjem')}</em>;
+}
+
 function StudentForm({ student, groups, onClose, onSaved }) {
   const [s, setS] = useState(student);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState(null);
   const set = (k, v) => setS(prev => ({ ...prev, [k]: v }));
+  const setWeekly = (n, meal, v) => setS(prev => {
+    const day = { ...(prev.weekly?.[n] || {}) };
+    if (v) day[meal] = v; else delete day[meal];
+    const weekly = { ...(prev.weekly || {}), [n]: day };
+    if (!Object.keys(day).length) delete weekly[n];
+    return { ...prev, weekly };
+  });
 
   async function save(e) {
     e.preventDefault();
@@ -111,11 +129,33 @@ function StudentForm({ student, groups, onClose, onSaved }) {
             </label>
           ))}
         </fieldset>
+        <fieldset className="span2 weekly-field">
+          <legend>Izjeme po dnevih <small>ponavljajo se vsak teden, npr. suho kosilo vsako sredo</small></legend>
+          <table className="weekly">
+            <thead><tr><th />{MEALS.map(m => <th key={m}>{MEAL_NAMES[m]}</th>)}</tr></thead>
+            <tbody>
+              {WEEKDAYS.map(([n, name]) => (
+                <tr key={n}>
+                  <th>{name}</th>
+                  {MEALS.map(m => (n === 5 && m === 'D' ? <td key={m} className="muted no-meal">ni večerje</td> : (
+                    <td key={m}>
+                      <select className={s.weekly?.[n]?.[m] ? 'set' : ''} value={s.weekly?.[n]?.[m] || ''} onChange={e => setWeekly(n, m, e.target.value)}>
+                        <option value="">Kot privzeto ({VARIANT_LABEL[s[DEF_COL[m]]].toLowerCase()})</option>
+                        {VARIANTS[m].map(v => <option key={v} value={v}>{VARIANT_LABEL[v]}</option>)}
+                        <option value="none">Ni prijavljen</option>
+                      </select>
+                    </td>
+                  )))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </fieldset>
         <label className="span2">Opombe<textarea rows={2} value={s.notes} onChange={e => set('notes', e.target.value)} /></label>
         {student.id && (
           <label className="inline-check span2"><input type="checkbox" checked={s.active} onChange={e => set('active', e.target.checked)} /> Živi v domu (odkljukajte, ko se dijak izseli)</label>
         )}
-        {student.id && <p className="hint span2">Sprememba privzetega menija posodobi vse odprte dni, ki niso bili ročno spremenjeni.</p>}
+        {student.id && <p className="hint span2">Sprememba privzetega menija ali izjem posodobi vse odprte dni do konca šolskega leta, ki niso bili ročno spremenjeni.</p>}
         {error && <p className="error span2">{error}</p>}
         <div className="form-actions span2">
           {student.id && (

@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Printer, Lock, Clock } from 'lucide-react';
 import { api } from './api.js';
 import {
   MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT,
-  addDays, dow, mondayOf, mealServed, nextSchoolDay, dayShort, fmtDay, fmtLong, studentName, capitalize,
+  addDays, dow, mondayOf, mealServed, nextSchoolDay, dayShort, fmtDay, fmtLong, studentName, capitalize, dishFor,
 } from './meals.js';
 
 function prevSchoolDay(day) {
@@ -72,7 +72,7 @@ export default function KitchenView({ clock }) {
                           {VARIANTS[m].map(v => (
                             <tr key={v} className={count[`${m}|${v}`] ? '' : 'zero'}>
                               <td><span className={`chip v-${v}`}>{VARIANT_SHORT[v]}</span></td>
-                              <td>{VARIANT_LABEL[v]}</td>
+                              <td>{VARIANT_LABEL[v]}{dishFor(data.menu, day, m, v) && <small className="dish">{dishFor(data.menu, day, m, v)}</small>}</td>
                               <td className="num">{count[`${m}|${v}`] || 0}</td>
                             </tr>
                           ))}

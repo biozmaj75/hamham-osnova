@@ -4,7 +4,7 @@ import { api } from './api.js';
 import Modal from './Modal.jsx';
 import { fmtLong, capitalize } from './meals.js';
 
-const ROLES = { admin: 'Skrbnik', teacher: 'Vzgojitelj', kitchen: 'Kuhinja' };
+const ROLES = { admin: 'Skrbnik', teacher: 'Vzgojitelj', dietitian: 'Organizator prehrane', kitchen: 'Kuhinja' };
 
 export default function AdminView({ me }) {
   return (
@@ -24,7 +24,7 @@ function Users({ me }) {
   return (
     <section className="table-card">
       <header className="card-head">
-        <div><h2>Uporabniški računi</h2><p className="muted">Vzgojitelji urejajo naročila, kuhinja vidi število obrokov in sezname, skrbniki upravljajo vse.</p></div>
+        <div><h2>Uporabniški računi</h2><p className="muted">Vzgojitelji urejajo naročila, organizator prehrane še jedilnik, kuhinja vidi število obrokov in sezname, skrbniki upravljajo vse.</p></div>
         <button className="btn primary" onClick={() => setEditing({ username: '', name: '', role: 'teacher', password: '', active: true })}><Plus size={16} /> Dodaj račun</button>
       </header>
       <table className="list">
@@ -85,7 +85,9 @@ function SettingsCard() {
   const [s, setS] = useState(null);
   const [msg, setMsg] = useState(null);
   const [day, setDay] = useState('');
+  const [to, setTo] = useState('');
   const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
   const load = () => api('settings').then(setS);
   useEffect(() => { load(); }, []);
 
@@ -93,26 +95,40 @@ function SettingsCard() {
 
   async function save(e) {
     e.preventDefault();
+    setBusy(true);
     try {
-      await api('saveSettings', { timezone: s.timezone, cutoff_hour: Number(s.cutoff_hour) });
-      setMsg({ ok: true, text: 'Shranjeno. Osvežite stran, da bo novi rok veljal povsod.' });
+      await api('saveSettings', {
+        timezone: s.timezone, cutoff_hour: Number(s.cutoff_hour),
+        school_year_start: s.school_year_start, school_year_end: s.school_year_end,
+      });
+      setMsg({ ok: true, text: 'Shranjeno. Osvežite stran, da bodo nove nastavitve veljale povsod.' });
     } catch (err) {
       setMsg({ ok: false, text: err.message });
     }
+    setBusy(false);
   }
 
   async function closeDay(e) {
     e.preventDefault();
-    await api('setClosedDay', { day, reason });
-    setDay(''); setReason('');
-    load();
+    try {
+      await api('setClosedDay', { day, to: to || day, reason });
+      setDay(''); setTo(''); setReason('');
+      load();
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
   return (
     <div className="admin-side">
       <section className="table-card pad-card">
-        <h2>Rok za naročila</h2>
+        <h2>Šolsko leto in rok</h2>
         <form className="form" onSubmit={save}>
+          <div className="form-pair">
+            <label>Prvi dan šolskega leta<input type="date" value={s.school_year_start} onChange={e => setS({ ...s, school_year_start: e.target.value })} /></label>
+            <label>Zadnji dan šolskega leta<input type="date" value={s.school_year_end} min={s.school_year_start} onChange={e => setS({ ...s, school_year_end: e.target.value })} /></label>
+          </div>
+          <p className="hint">Vsi dijaki so samodejno prijavljeni po svojem privzetem meniju in izjemah za ves čas šolskega leta. Brez šolskega leta se naročila pripravijo štiri tedne vnaprej.</p>
           <label>Naročila za posamezen dan se zaprejo dan prej ob
             <select value={s.cutoff_hour} onChange={e => setS({ ...s, cutoff_hour: e.target.value })}>
               {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}.00</option>)}
@@ -120,15 +136,16 @@ function SettingsCard() {
           </label>
           <label>Časovni pas<input value={s.timezone} onChange={e => setS({ ...s, timezone: e.target.value })} /></label>
           {msg && <p className={msg.ok ? 'success' : 'error'}>{msg.text}</p>}
-          <div className="form-actions"><button className="btn primary">Shrani</button></div>
+          <div className="form-actions"><button className="btn primary" disabled={busy}>{busy ? 'Shranjevanje …' : 'Shrani'}</button></div>
         </form>
       </section>
       <section className="table-card pad-card">
         <h2>Kuhinja zaprta</h2>
-        <p className="muted">Počitnice in dnevi brez obrokov. Naročil za te dni ni mogoče spreminjati, na seznamu za kuhinjo je dan označen kot zaprt.</p>
-        <form className="form row" onSubmit={closeDay}>
-          <input type="date" value={day} onChange={e => setDay(e.target.value)} />
-          <input placeholder="Razlog, npr. jesenske počitnice" value={reason} onChange={e => setReason(e.target.value)} />
+        <p className="muted">Počitnice, prazniki in dnevi brez obrokov. Za počitnice vpišite prvi in zadnji dan. Naročil za te dni ni mogoče spreminjati, na seznamu za kuhinjo je dan označen kot zaprt.</p>
+        <form className="form closed-form" onSubmit={closeDay}>
+          <label>Od<input type="date" value={day} onChange={e => setDay(e.target.value)} /></label>
+          <label>Do (neobvezno)<input type="date" value={to} min={day} onChange={e => setTo(e.target.value)} /></label>
+          <input className="span2" placeholder="Razlog, npr. jesenske počitnice" value={reason} onChange={e => setReason(e.target.value)} />
           <button className="btn" disabled={!day}><Plus size={16} /> Dodaj</button>
         </form>
         <ul className="closed-list">

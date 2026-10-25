@@ -12,6 +12,26 @@ export const VARIANTS = {
 
 export const ALL_VARIANTS = VARIANTS.D;
 
+// Dishes the menu planner enters; late meals get the same dish as normal/vegetarian
+export const MENU_VARIANTS = {
+  B: ['normal', 'veg'],
+  L: ['normal', 'veg', 'dry_normal', 'dry_veg'],
+  D: ['normal', 'veg', 'dry_normal', 'dry_veg', 'light'],
+};
+
+const MENU_SOURCE = { late_normal: 'normal', late_veg: 'veg' };
+
+// menu: [{day, meal, variant, dish}] -> dish for a variant (late meals use the normal/vegetarian dish)
+export function dishFor(menu, day, meal, variant) {
+  const v = MENU_SOURCE[variant] || variant;
+  return menu?.find(m => m.day === day && m.meal === meal && m.variant === v)?.dish || '';
+}
+
+export const DEF_COL = { B: 'def_b', L: 'def_l', D: 'def_d' };
+
+// ISO weekdays 1–5 for weekday exceptions
+export const WEEKDAYS = [[1, 'ponedeljek'], [2, 'torek'], [3, 'sreda'], [4, 'četrtek'], [5, 'petek']];
+
 export const VARIANT_LABEL = {
   none: 'Ni prijavljen',
   normal: 'Navadni',
@@ -46,6 +66,15 @@ export function addDays(day, n) {
 }
 
 export function dow(day) { return at(day).getUTCDay(); }
+
+// Weekday exception for that day if there is one, otherwise the student's default menu
+export function weeklyVariant(student, day, meal) {
+  return student.weekly?.[dow(day)]?.[meal] || '';
+}
+
+export function defaultVariant(student, day, meal) {
+  return weeklyVariant(student, day, meal) || student[DEF_COL[meal]];
+}
 
 export function mondayOf(day) {
   const w = dow(day);

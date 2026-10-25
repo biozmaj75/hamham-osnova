@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, ChefHat, Users, Settings, LogOut, KeyRound } from 'lucide-react';
+import { CalendarDays, ChefHat, Users, Settings, LogOut, KeyRound, UtensilsCrossed } from 'lucide-react';
 import { api, session } from './api.js';
 import Login from './Login.jsx';
 import OrdersView from './OrdersView.jsx';
 import KitchenView from './KitchenView.jsx';
 import StudentsView from './StudentsView.jsx';
 import AdminView from './AdminView.jsx';
+import MenuView from './MenuView.jsx';
 import PasswordDialog from './PasswordDialog.jsx';
 
 const TABS = [
-  { id: 'orders', label: 'Naročila', icon: CalendarDays, roles: ['admin', 'teacher'] },
-  { id: 'kitchen', label: 'Kuhinja', icon: ChefHat, roles: ['admin', 'teacher', 'kitchen'] },
-  { id: 'students', label: 'Dijaki', icon: Users, roles: ['admin', 'teacher'] },
+  { id: 'orders', label: 'Naročila', icon: CalendarDays, roles: ['admin', 'teacher', 'dietitian'] },
+  { id: 'menu', label: 'Jedilnik', icon: UtensilsCrossed, roles: ['admin', 'teacher', 'dietitian', 'kitchen'] },
+  { id: 'kitchen', label: 'Kuhinja', icon: ChefHat, roles: ['admin', 'teacher', 'dietitian', 'kitchen'] },
+  { id: 'students', label: 'Dijaki', icon: Users, roles: ['admin', 'teacher', 'dietitian'] },
   { id: 'admin', label: 'Skrbništvo', icon: Settings, roles: ['admin'] },
 ];
 
-const ROLE_NAME = { admin: 'Skrbnik', teacher: 'Vzgojitelj', kitchen: 'Kuhinja' };
+const ROLE_NAME = { admin: 'Skrbnik', teacher: 'Vzgojitelj', dietitian: 'Organizator prehrane', kitchen: 'Kuhinja' };
 
 export default function App() {
   const [me, setMe] = useState(null);
@@ -62,6 +64,7 @@ export default function App() {
       </header>
       <main className="main">
         {active.id === 'orders' && <OrdersView clock={me.clock} />}
+        {active.id === 'menu' && <MenuView clock={me.clock} canEdit={['admin', 'dietitian'].includes(me.user.role)} />}
         {active.id === 'kitchen' && <KitchenView clock={me.clock} />}
         {active.id === 'students' && <StudentsView />}
         {active.id === 'admin' && <AdminView me={me.user} />}

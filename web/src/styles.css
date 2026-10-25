@@ -328,6 +328,53 @@ input[type='checkbox'] { accent-color: var(--accent); width: 15px; height: 15px;
   .defaults-field { grid-template-columns: 1fr; }
 }
 
+/* ---------- school year, closed ranges, weekday exceptions */
+.form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.closed-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; align-items: end; }
+.closed-form .span2 { grid-column: span 2; }
+.closed-form .btn { justify-self: start; }
+.weekly-field { border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 14px 14px; margin: 0; overflow-x: auto; }
+.weekly-field legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
+table.weekly { width: 100%; border-collapse: collapse; }
+table.weekly th { font-family: var(--mono); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: left; padding: 4px 6px; }
+table.weekly tbody th { font-family: var(--body); font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink); white-space: nowrap; }
+table.weekly td { padding: 3px 4px; }
+table.weekly select { width: 100%; min-width: 130px; padding: 4px 6px; font-size: 12.5px; border: 1px solid var(--rule); border-radius: 4px; background: var(--card); color: var(--muted); }
+table.weekly select.set { color: var(--ink); font-weight: 600; border-color: var(--accent); background: #fcebe5; }
+table.weekly .no-meal { color: var(--muted); font-size: 12px; font-style: italic; }
+
+/* ---------- dishes in popover / kitchen */
+.popover.with-menu { width: 280px; }
+.opt-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.opt-text small { color: var(--muted); font-size: 11.5px; font-weight: 400; white-space: normal; line-height: 1.3; }
+.dish { display: block; color: var(--muted); font-size: 12px; line-height: 1.3; }
+
+/* ---------- menu planner */
+.menu-view { padding-bottom: 40px; }
+.save-state { font-size: 12.5px; }
+.menu-wrap { max-height: none; }
+.menu-grid th, .menu-grid td { white-space: normal; vertical-align: top; }
+.menu-grid thead th { min-width: 180px; padding: 8px; font-family: var(--display); font-size: 15px; }
+.menu-grid thead th .day-name { text-transform: capitalize; }
+.menu-grid thead th.closed { color: var(--muted); }
+.menu-grid .closed-note { display: block; font-family: var(--body); font-size: 11.5px; color: var(--accent-ink); font-weight: 400; }
+.menu-grid .sticky-col { min-width: 170px; }
+.menu-grid .meal-head th { background: var(--paper-2); font-family: var(--display); font-size: 16px; padding: 7px 12px; text-align: left; }
+.menu-grid th.variant { font-weight: 500; font-size: 13px; padding-top: 9px; }
+.menu-grid td { text-align: left; padding: 4px; }
+.menu-grid td.dish-cell > span { display: block; padding: 5px 6px; }
+.menu-grid td.no-meal { color: var(--muted); font-style: italic; font-size: 12.5px; padding: 9px 8px; background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(29, 27, 22, 0.03) 6px 12px); }
+.menu-grid textarea { width: 100%; min-width: 170px; resize: vertical; border: 1px solid transparent; border-radius: 4px; background: transparent; padding: 5px 6px; font-size: 13px; line-height: 1.35; }
+.menu-grid textarea:hover { border-color: var(--rule); }
+.menu-grid textarea:focus { outline: none; border-color: var(--ink); background: #fff; }
+.menu-grid tbody tr:hover td { background: transparent; }
+.menu-note { padding: 12px 24px; }
+.print-only { display: none; }
+@media (max-width: 600px) {
+  .form-pair, .closed-form { grid-template-columns: 1fr; }
+  .closed-form .span2 { grid-column: auto; }
+}
+
 /* ---------- print (kitchen sheet) */
 @media print {
   body { background: #fff; font-size: 12px; }
@@ -336,4 +383,9 @@ input[type='checkbox'] { accent-color: var(--accent); width: 15px; height: 15px;
   .meal-cards { grid-template-columns: repeat(3, 1fr); }
   .lists { grid-template-columns: 1fr 1fr 1fr; }
   .chip { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-only { display: block; }
+  .menu-print-head { padding: 0 0 10px; }
+  .menu-wrap { box-shadow: none; margin: 0; max-width: none; overflow: visible; }
+  .menu-grid textarea { border: none; resize: none; overflow: hidden; }
+  .menu-grid .sticky-col { position: static; }
 }

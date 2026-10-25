@@ -4,10 +4,10 @@ import { api } from './api.js';
 import {
   MEALS, MEAL_NAMES, MEAL_SHORT, VARIANTS, ALL_VARIANTS, VARIANT_LABEL, VARIANT_SHORT,
   addDays, startWeek, mealServed, dayShort, fmtDay, fmtLong, studentName, capitalize, plural,
+  defaultVariant, weeklyVariant, dishFor,
 } from './meals.js';
 
 const key = (sid, day, meal) => `${sid}|${day}|${meal}`;
-const DEF_COL = { B: 'def_b', L: 'def_l', D: 'def_d' };
 
 function describeResult(r) {
   const parts = [`${r.saved} ${plural(r.saved, 'obrok shranjen', 'obroka shranjena', 'obroki shranjeni', 'obrokov shranjenih')}`];
@@ -76,7 +76,7 @@ export default function OrdersView({ clock: initialClock }) {
       const next = new Map(prev);
       for (const c of changes) {
         const s = data.students.find(x => x.id === c.student_id);
-        const variant = c.variant === 'default' ? s[DEF_COL[c.meal]] : c.variant;
+        const variant = c.variant === 'default' ? defaultVariant(s, c.day, c.meal) : c.variant;
         if (VARIANTS[c.meal].includes(variant) || variant === 'none') {
           next.set(key(c.student_id, c.day, c.meal), { ...c, variant, source: c.variant === 'default' ? 'default' : 'manual' });
         }
@@ -204,7 +204,7 @@ export default function OrdersView({ clock: initialClock }) {
                           <button
                             className={`chip v-${v} ${o?.source === 'manual' ? 'manual' : ''}`}
                             disabled={locked}
-                            title={`${MEAL_NAMES[c.meal]} ${fmtDay(c.day)}: ${VARIANT_LABEL[v]}${o?.source === 'manual' ? ' (ročno spremenjeno)' : ''}`}
+                            title={cellTitle(s, c, v, o, data.menu)}
                             onClick={e => openCell(e, s, c.day, c.meal)}
                           >{VARIANT_SHORT[v]}</button>
                         </td>
@@ -233,6 +233,7 @@ export default function OrdersView({ clock: initialClock }) {
         <CellPopover
           pop={pop}
           orders={orders}
+          menu={data?.menu}
           selectedCount={selected.has(pop.student.id) ? selected.size : 0}
           onClose={() => setPop(null)}
           onPick={(variant, scope, everyone) => {
@@ -270,12 +271,12 @@ export default function OrdersView({ clock: initialClock }) {
   );
 }
 
-function CellPopover({ pop, orders, selectedCount, onClose, onPick }) {
+function CellPopover({ pop, orders, menu, selectedCount, onClose, onPick }) {
   const ref = useRef(null);
   const [everyone, setEveryone] = useState(false);
   const { student, day, meal } = pop;
   const current = orders.get(key(student.id, day, meal))?.variant || 'none';
-  const def = student[DEF_COL[meal]];
+  const def = defaultVariant(student, day, meal);
 
   useEffect(() => {
     const onDown = e => ref.current && !ref.current.contains(e.target) && onClose();
@@ -285,11 +286,13 @@ function CellPopover({ pop, orders, selectedCount, onClose, onPick }) {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [onClose]);
 
-  const left = Math.min(pop.x, window.innerWidth - 300);
-  const top = pop.y + 330 > window.innerHeight ? Math.max(8, pop.y - 360) : pop.y + 6;
+  const hasMenu = VARIANTS[meal].some(v => dishFor(menu, day, meal, v));
+  const height = hasMenu ? 520 : 360;
+  const left = Math.min(pop.x, window.innerWidth - (hasMenu ? 340 : 300));
+  const top = pop.y + height > window.innerHeight ? Math.max(8, pop.y - height) : pop.y + 6;
 
   return (
-    <div className="popover" ref={ref} style={{ left, top }}>
+    <div className={`popover ${hasMenu ? 'with-menu' : ''}`} ref={ref} style={{ left, top }}>
       <header>
         <strong>{everyone ? `Izbrani dijaki: ${selectedCount}` : studentName(student)}</strong>
         <span>{MEAL_NAMES[meal]} · {capitalize(fmtLong(day))}</span>
@@ -297,14 +300,15 @@ function CellPopover({ pop, orders, selectedCount, onClose, onPick }) {
       <div className="pop-options">
         {VARIANTS[meal].map(v => (
           <button key={v} className={`opt ${current === v && !everyone ? 'cur' : ''}`} onClick={() => onPick(v, 'meal', everyone)}>
-            <span className={`chip v-${v}`}>{VARIANT_SHORT[v]}</span>{VARIANT_LABEL[v]}
+            <span className={`chip v-${v}`}>{VARIANT_SHORT[v]}</span>
+            <span className="opt-text">{VARIANT_LABEL[v]}{dishFor(menu, day, meal, v) && <small>{dishFor(menu, day, meal, v)}</small>}</span>
           </button>
         ))}
         <button className={`opt ${current === 'none' && !everyone ? 'cur' : ''}`} onClick={() => onPick('none', 'meal', everyone)}>
           <span className="chip v-none">–</span>Ni prijavljen
         </button>
         <button className="opt" onClick={() => onPick('default', 'meal', everyone)}>
-          <span className="chip v-default">↺</span>Nazaj na privzeto{!everyone && ` (${VARIANT_LABEL[def]})`}
+          <span className="chip v-default">↺</span>Nazaj na privzeto{!everyone && ` (${VARIANT_LABEL[def]}${weeklyVariant(student, day, meal) ? ', izjema' : ''})`}
         </button>
       </div>
       <div className="pop-day">
@@ -317,6 +321,14 @@ function CellPopover({ pop, orders, selectedCount, onClose, onPick }) {
       )}
     </div>
   );
+}
+
+function cellTitle(s, c, v, o, menu) {
+  const notes = [];
+  if (o?.source === 'manual') notes.push('ročno spremenjeno');
+  else if (weeklyVariant(s, c.day, c.meal)) notes.push('tedenska izjema');
+  const dish = v !== 'none' && dishFor(menu, c.day, c.meal, v);
+  return `${MEAL_NAMES[c.meal]} ${fmtDay(c.day)}: ${VARIANT_LABEL[v]}${notes.length ? ` (${notes.join(', ')})` : ''}${dish ? `\n${dish}` : ''}`;
 }
 
 function BulkBar({ count, defaultFrom, defaultTo, minDay, onApply, onClear }) {

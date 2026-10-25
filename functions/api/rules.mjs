@@ -9,6 +9,15 @@ export const VARIANTS = {
   D: ['normal', 'veg', 'dry_normal', 'dry_veg', 'late_normal', 'late_veg', 'light'],
 };
 
+// Dishes the menu planner fills in. Late meals get the same dish as the normal/vegetarian one.
+export const MENU_VARIANTS = {
+  B: ['normal', 'veg'],
+  L: ['normal', 'veg', 'dry_normal', 'dry_veg'],
+  D: ['normal', 'veg', 'dry_normal', 'dry_veg', 'light'],
+};
+
+export const DEF_COL = { B: 'def_b', L: 'def_l', D: 'def_d' };
+
 // 'none' = not registered for that meal
 export function validVariant(meal, variant) {
   return variant === 'none' || (VARIANTS[meal] || []).includes(variant);
@@ -26,6 +35,12 @@ export function mealServed(day, meal) {
   if (dow > 5) return false;
   if (dow === 5 && meal === 'D') return false;
   return MEALS.includes(meal);
+}
+
+// What a student gets when nobody changed the day by hand:
+// the weekday exception if there is one (e.g. dry lunch every Wednesday), otherwise the default menu
+export function defaultVariant(student, day, meal) {
+  return student.weekly?.[isoDow(day)]?.[meal] || student[DEF_COL[meal]];
 }
 
 export function addDays(day, n) {
