@@ -1,7 +1,7 @@
 // Minimal .xlsx reader (no library): first worksheet -> array of rows, each an array of cell values.
 // An .xlsx file is a zip of XML parts; entries are inflated with the browser's DecompressionStream.
 
-async function unzip(buffer) {
+export async function unzip(buffer) {
   const view = new DataView(buffer);
   // End of central directory record: last 22+ bytes, signature 0x06054b50
   let eocd = -1;
@@ -25,7 +25,7 @@ async function unzip(buffer) {
     files.set(name, { method, size, local });
     p += 46 + nameLen + extraLen + commentLen;
   }
-  return async name => {
+  const read = async name => {
     const f = files.get(name);
     if (!f) return null;
     const start = f.local + 30 + view.getUint16(f.local + 26, true) + view.getUint16(f.local + 28, true);
@@ -34,6 +34,8 @@ async function unzip(buffer) {
     const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
     return new Response(stream).text();
   };
+  read.names = [...files.keys()];
+  return read;
 }
 
 const xml = text => new DOMParser().parseFromString(text, 'application/xml');
@@ -117,7 +119,7 @@ function crc32(bytes) {
 }
 
 // Stored (uncompressed) zip
-function zip(files) {
+export function zip(files, type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
   const enc = new TextEncoder();
   const parts = [];
   const central = [];
@@ -157,7 +159,7 @@ function zip(files) {
   end.setUint16(10, files.length, true);
   end.setUint32(12, size, true);
   end.setUint32(16, offset, true);
-  return new Blob([...parts, ...central, end], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  return new Blob([...parts, ...central, end], { type });
 }
 
 const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')

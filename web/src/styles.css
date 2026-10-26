@@ -548,3 +548,8 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .diet-list .diet { max-width: none; font-size: 12px; padding: 2px 4px 2px 9px; }
 .diet-list .diet button { border: 0; background: none; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; border-radius: 99px; }
 .diet-list .diet button:hover { background: rgba(0,0,0,0.08); }
+.izpisnica h5 { margin: 10px 0 6px; font-size: 13px; }
+.izpisnica .span2 { grid-column: 1 / -1; }
+.izpis-checks { display: grid; gap: 6px; margin: 10px 0; font-size: 13px; }
+.izpis-check { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.izpis-check > span { flex: 1 1 260px; }

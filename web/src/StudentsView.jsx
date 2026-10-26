@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2, DoorOpen } from 'lucide-react';
+import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2, DoorOpen, FileText } from 'lucide-react';
 import { api } from './api.js';
 import { readXlsx, excelDate } from './xlsx.js';
 import { DETAIL_FIELDS, detailColumns, rowDetails } from './details.js';
 import Modal from './Modal.jsx';
+import IzpisnicaForm from './Izpisnica.jsx';
 import { loginSlipsPdf, openPdf, pdfTab } from './pdf.js';
 import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, WEEKDAYS, DEF_COL, ROLE_NAME, fmtDay, studentName, plural } from './meals.js';
 
@@ -558,6 +559,7 @@ function MoveOutBox({ student, details, onDone }) {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [izpis, setIzpis] = useState(false);
   const name = studentName(student);
 
   function open() {
@@ -585,7 +587,9 @@ function MoveOutBox({ student, details, onDone }) {
 
   return (
     <section className="side-box move-out">
-      <h4><DoorOpen size={15} /> Bivanje v domu</h4>
+      <h4><DoorOpen size={15} /> Bivanje v domu
+        {!izpis && <button type="button" className="btn small ghost" onClick={() => setIzpis(true)}><FileText size={14} /> Izpisnica</button>}
+      </h4>
       {gone ? (
         <>
           <p><b>Izseljen</b>{student.left_on ? <> · zadnji dan v domu <b>{fmtDate(student.left_on)}</b></> : ''}
@@ -613,6 +617,11 @@ function MoveOutBox({ student, details, onDone }) {
             <button type="button" className="btn small ghost" onClick={() => setAsking(false)} disabled={busy}>Prekliči</button>
           </div>
         </div>
+      )}
+      {izpis && (
+        <IzpisnicaForm student={student} details={details || {}}
+          leftOn={asking ? date : student.left_on || ''} reason={asking ? reason : details?.left_reason || ''}
+          onClose={() => setIzpis(false)} />
       )}
       {error && <p className="error">{error}</p>}
     </section>
