@@ -613,9 +613,10 @@ const actions = {
     const db = getPool();
     // group: one group name, '@mine' = the teacher's own groups, empty = the whole home
     const only = b.group === '@mine' ? (user.groups || []) : b.group ? [b.group] : null;
-    // A student who moved out leaves the grid as soon as none of their days can be changed any more
-    const params = [ck.firstEditable];
-    let where = 'where active and (left_on is null or left_on >= $1)';
+    // A student who moved out stays in the grid to the end of the month of their last day ($1 = first shown day)
+    const inGrid = (a = '') => `((${a}active and ${a}left_on is null) or ${a}left_on >= date_trunc('month', $1::date))`;
+    const params = [b.from];
+    let where = `where ${inGrid()}`;
     if (only) { params.push(only); where += ` and group_name = any($${params.length}::text[])`; }
     const cols = can(user, 'students') ? 'room, ' : '';
     const { rows: students } = await db.query(
@@ -624,11 +625,10 @@ const actions = {
     const { rows: orders } = await db.query(`
       select o.student_id, o.day, o.meal::text as meal, o.variant, o.source
       from orders o join students s on s.id = o.student_id
-      where o.day between $1 and $2 and s.active and (s.left_on is null or s.left_on >= $3) ${only ? 'and s.group_name = any($4::text[])' : ''}`,
-      only ? [b.from, b.to, ck.firstEditable, only] : [b.from, b.to, ck.firstEditable]);
+      where o.day between $1 and $2 and ${inGrid('s.')} ${only ? 'and s.group_name = any($3::text[])' : ''}`,
+      only ? [b.from, b.to, only] : [b.from, b.to]);
     const { rows: groups } = await db.query(
-      `select group_name, count(*)::int as n from students where active and (left_on is null or left_on >= $1)
-       group by group_name order by group_name`, [ck.firstEditable]);
+      `select group_name, count(*)::int as n from students where ${inGrid()} group by group_name order by group_name`, [b.from]);
     const { rows: absences } = await db.query(
       `select id, student_id, day_from, day_to, reason from absences where day_to >= $1 and day_from <= $2`, [b.from, b.to]);
     return {
