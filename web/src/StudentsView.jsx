@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2 } from 'lucide-react';
+import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2, DoorOpen } from 'lucide-react';
 import { api } from './api.js';
 import { readXlsx, excelDate } from './xlsx.js';
 import { DETAIL_FIELDS, detailColumns, rowDetails } from './details.js';
@@ -10,6 +10,10 @@ import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, WEEKDAYS, DE
 const EMPTY = { first_name: '', last_name: '', group_name: '', room: '', diet: '', diet_reason: '', notes: '', def_b: 'normal', def_l: 'normal', def_d: 'normal', weekly: {}, active: true };
 
 const fmtDate = d => d.split('-').reverse().map(Number).join('. ');
+
+// Moved out, or leaving on a set date: shown only under "Prikaži izseljene"
+const isGone = s => !s.active || !!s.left_on;
+const localToday = () => new Date().toLocaleDateString('sv-SE');
 const fmtTime = t => (t ? new Date(t).toLocaleString('sl-SI', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 // Issues logins (new ones, or new temporary passwords) and opens the slips to print in `win` (see pdfTab)
@@ -54,6 +58,7 @@ export default function StudentsView({ me }) {
   const [importing, setImporting] = useState(false);
   const [weeklyBulk, setWeeklyBulk] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const load = () => api('students').then(r => { setStudents(r.students); setFull(r.full); }).catch(err => setError(err.message));
   useEffect(() => { load(); }, []);
@@ -63,11 +68,11 @@ export default function StudentsView({ me }) {
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const inGroup = s => !group || (group === '@mine' ? myGroups.includes(s.group_name) : s.group_name === group);
-    return (students || []).filter(s => (showInactive || s.active) && inGroup(s)
+    return (students || []).filter(s => showInactive === isGone(s) && inGroup(s)
       && (!q || `${s.first_name} ${s.last_name} ${s.group_name} ${s.room || ''} ${s.diet}`.toLowerCase().includes(q)));
   }, [students, query, showInactive, group]);
 
-  const activeCount = (students || []).filter(s => s.active).length;
+  const activeCount = (students || []).filter(s => !isGone(s)).length;
 
   return (
     <div className="students">
@@ -87,6 +92,8 @@ export default function StudentsView({ me }) {
       </div>
       {students && !full && <p className="hint pad-x">Vidite samo podatke, potrebne za prehrano. Osebne podatke dijakov urejajo vzgojitelji.</p>}
       {error && <p className="error banner">{error}</p>}
+      {notice && <p className="notice banner" onClick={() => setNotice('')}>{notice}</p>}
+      {showInactive && <p className="hint pad-x">Prikazani so samo izseljeni dijaki. Kliknite dijaka, da spremenite datum izstopa ali ga vrnete v dom.</p>}
       {!students ? <p className="muted pad">Nalaganje …</p> : (
         <div className="table-card">
           <table className="list">
@@ -94,7 +101,7 @@ export default function StudentsView({ me }) {
             <tbody>
               {shown.map(s => (
                 <tr key={s.id} className={s.active ? '' : 'inactive'} onClick={() => setEditing({ ...s })}>
-                  <td><strong>{studentName(s)}</strong>{!s.active && <em className="tag">izseljen</em>}</td>
+                  <td><strong>{studentName(s)}</strong>{isGone(s) && <em className="tag">{s.left_on ? `izstop ${fmtDate(s.left_on)}` : 'izseljen'}</em>}</td>
                   <td>{s.group_name}</td>
                   {full && <td>{s.room}</td>}
                   <td className="defaults">
@@ -106,17 +113,17 @@ export default function StudentsView({ me }) {
                   <td className="muted right">Uredi</td>
                 </tr>
               ))}
-              {shown.length === 0 && <tr><td colSpan={8} className="muted">Ni najdenih dijakov.</td></tr>}
+              {shown.length === 0 && <tr><td colSpan={8} className="muted">{showInactive ? 'Ni izseljenih dijakov.' : 'Ni najdenih dijakov.'}</td></tr>}
             </tbody>
           </table>
         </div>
       )}
       {editing && (
         <StudentForm student={editing} groups={groups} full={full} me={me}
-          onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} onChanged={load} />
+          onClose={() => setEditing(null)} onSaved={msg => { setEditing(null); setNotice(msg || ''); load(); }} onChanged={load} />
       )}
-      {logins && <LoginsDialog students={students.filter(s => s.active)} groups={groups} initialGroup={group === '@mine' ? myGroups[0] || '' : group} me={me} onClose={() => { setLogins(false); load(); }} />}
-      {weeklyBulk && <WeeklyDialog students={students.filter(s => s.active)} groups={groups} initialGroup={group === '@mine' ? myGroups[0] || '' : group}
+      {logins && <LoginsDialog students={students.filter(s => !isGone(s))} groups={groups} initialGroup={group === '@mine' ? myGroups[0] || '' : group} me={me} onClose={() => { setLogins(false); load(); }} />}
+      {weeklyBulk && <WeeklyDialog students={students.filter(s => !isGone(s))} groups={groups} initialGroup={group === '@mine' ? myGroups[0] || '' : group}
         onClose={() => setWeeklyBulk(false)} onDone={() => { setWeeklyBulk(false); load(); }} />}
       {importing && <ImportDialog me={me} onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(); }} />}
     </div>
@@ -157,8 +164,6 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
 
   async function save(e) {
     e.preventDefault();
-    if (student.id && student.active && !s.active
-      && !confirm('Označim dijaka kot izseljenega? Vsa naročila, ki jih je še mogoče spremeniti, bodo preklicana.')) return;
     setBusy(true);
     try {
       await api('saveStudent', { student: s });
@@ -227,9 +232,6 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
           </table>
         </fieldset>
         {full && <label className="span2">Opombe<textarea rows={2} value={s.notes || ''} onChange={e => set('notes', e.target.value)} /></label>}
-        {full && student.id && (
-          <label className="inline-check span2"><input type="checkbox" checked={s.active} onChange={e => set('active', e.target.checked)} /> Živi v domu (odkljukajte, ko se dijak izseli)</label>
-        )}
         {student.id && <p className="hint span2">Sprememba privzetega menija ali izjem posodobi vse odprte dni do konca šolskega leta, ki niso bili ročno spremenjeni.</p>}
         </div>
         {error && <p className="error span2">{error}</p>}
@@ -244,6 +246,7 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
           <button className="btn primary" disabled={busy}>{busy ? 'Shranjevanje …' : 'Shrani'}</button>
         </div>
       </form>
+      {tab === 'basic' && student.id && full && <MoveOutBox student={student} details={s.details} onDone={onSaved} />}
       {tab === 'basic' && student.id && student.active && full && <LoginBox student={student} me={me} onChanged={onChanged} />}
       {tab === 'basic' && student.id && student.active && me.rights.includes('orders') && <AbsenceBox student={student} />}
       {tab === 'basic' && log && (
@@ -497,6 +500,75 @@ function ImportDialog({ me, onClose, onDone }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+// "Živi v domu": unticking asks for the last day in the home; meals after it are cancelled to the end of the school year
+function MoveOutBox({ student, details, onDone }) {
+  const gone = isGone(student);
+  const [asking, setAsking] = useState(false);
+  const [date, setDate] = useState(student.left_on || localToday());
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const name = studentName(student);
+
+  function open() {
+    setReason(details?.left_reason || '');
+    setError('');
+    setAsking(true);
+  }
+
+  async function run(action, args, done) {
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api(action, { id: student.id, ...args });
+      onDone(done(r));
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  const moveOut = () => run('moveOut', { date, reason }, r => `${name} je izseljen (zadnji dan v domu ${fmtDate(date)}). `
+    + `Odjavljenih obrokov: ${r.cancelled}.${r.locked ? ` ${r.locked} obrokov je že zaklenjenih (rok za spremembe je potekel) in ostanejo naročeni.` : ''}`
+    + ' Dijaka najdete pod »Prikaži izseljene«.');
+  const moveBack = () => run('moveBack', {}, () => `${name} je spet v domu – obroki so prijavljeni po privzetem meniju.`);
+
+  return (
+    <section className="side-box move-out">
+      <h4><DoorOpen size={15} /> Bivanje v domu</h4>
+      {gone ? (
+        <>
+          <p><b>Izseljen</b>{student.left_on ? <> · zadnji dan v domu <b>{fmtDate(student.left_on)}</b></> : ''}
+            {details?.left_reason ? <span className="muted"> · {details.left_reason}</span> : ''}</p>
+          {!asking && (
+            <div className="box-actions">
+              <button type="button" className="btn small" onClick={open} disabled={busy}>Spremeni datum izstopa</button>
+              <button type="button" className="btn small ghost" onClick={moveBack} disabled={busy}>{busy ? 'Shranjujem …' : 'Vrni v dom'}</button>
+            </div>
+          )}
+        </>
+      ) : (
+        <label className="inline-check"><input type="checkbox" checked={!asking} onChange={() => (asking ? setAsking(false) : open())} /> Živi v domu (odkljukajte, ko se dijak izseli)</label>
+      )}
+      {asking && (
+        <div className="confirm-box">
+          <div className="move-out-fields">
+            <label>Zadnji dan v domu (datum izstopa)<input type="date" value={date} onChange={e => setDate(e.target.value)} required /></label>
+            <label>Razlog izstopa <small>neobvezno</small><input value={reason} onChange={e => setReason(e.target.value)} placeholder="npr. prešolanje" /></label>
+          </div>
+          <p>Vsi obroki po {date ? fmtDate(date) : 'tem datumu'} do konca šolskega leta bodo odjavljeni. Dijak izgine s seznama
+            {date && date < localToday() ? ' in se ne more več prijaviti v aplikacijo.' : ' – do vključno tega dne še živi v domu in se lahko prijavi v aplikacijo.'} Najdete ga pod »Prikaži izseljene«.</p>
+          <div className="box-actions">
+            <button type="button" className="btn small primary" onClick={moveOut} disabled={busy || !date}>{busy ? 'Shranjujem …' : 'Izseli dijaka'}</button>
+            <button type="button" className="btn small ghost" onClick={() => setAsking(false)} disabled={busy}>Prekliči</button>
+          </div>
+        </div>
+      )}
+      {error && <p className="error">{error}</p>}
+    </section>
   );
 }
 

@@ -94,6 +94,7 @@ const planSql = where => `
     select a.id from absences a where a.student_id = s.id and d::date between a.day_from and a.day_to limit 1
   ) ab on true
   where ${where}
+    and (s.left_on is null or d::date <= s.left_on)
     and extract(isodow from d) <= 5
     and not (extract(isodow from d) = 5 and m.meal = 'D')
   on conflict do nothing`;
@@ -175,7 +176,7 @@ async function applyChanges(ck, requests, userId) {
   for (const r of requests) {
     const s = byId.get(Number(r.student_id));
     if (!s || !isDate(r.day) || !MEALS.includes(r.meal)) { skipped.invalid++; continue; }
-    if (!s.active) { skipped.inactive++; continue; }
+    if (!s.active || (s.left_on && r.day > s.left_on)) { skipped.inactive++; continue; }
     if (r.day < ck.firstEditable) { skipped.locked++; continue; }
     if (!mealServed(r.day, r.meal)) { skipped.notServed++; continue; }
     if (closed.has(r.day)) { skipped.closed++; continue; }
@@ -337,7 +338,7 @@ async function saveStudent(ck, input, userId) {
       `select student_id, day, meal::text as meal, variant from orders
        where student_id = $1 and day >= $2 and source = 'default'`, [b.id, ck.firstEditable]);
     const changes = future
-      .map(r => ({ ...r, newVariant: defaultVariant(s, r.day, r.meal) }))
+      .map(r => ({ ...r, newVariant: defaultVariant({ ...s, left_on: old.left_on }, r.day, r.meal) }))
       .filter(r => r.newVariant !== r.variant)
       .map(r => ({ student_id: r.student_id, day: r.day, meal: r.meal, variant: r.newVariant, source: 'default' }));
     await writeOrders(changes, userId);
@@ -346,11 +347,53 @@ async function saveStudent(ck, input, userId) {
   return rows[0];
 }
 
+// Moving out: no meals after `date` (the last day in the home) to the end of the school year; null = back in the home.
+// Unlocked days up to the date follow the default menu again, so the date can also be moved.
+async function setLeftOn(ck, id, date, reason, user) {
+  const db = getPool();
+  const { rows } = await db.query('select * from students where id = $1', [id]);
+  if (!rows[0]) throw new HttpError(400, 'Dijaka ni mogoče najti');
+  const old = rows[0];
+  await horizon(ck);
+  const here = !date || date >= ck.today;
+  const s = { ...old, left_on: date, active: here };
+  const shown = date ? { left_on: date.split('-').reverse().map(Number).join('. '), ...(reason ? { left_reason: reason } : {}) } : {};
+  await db.query(`update students set left_on = $2, active = $3,
+      details = (details - 'left_on' - (case when $5 then 'left_reason' else '' end)) || $4::jsonb where id = $1`,
+    [id, date, here, JSON.stringify(shown), !date || !!reason]);
+  if (!here) await db.query('update users set active = false where student_id = $1', [id]);
+  else if (!old.active) await db.query('update users set active = true where student_id = $1', [id]);
+  const { rows: future } = await db.query(
+    `select student_id, day, meal::text as meal, variant, source from orders where student_id = $1 and day >= $2`,
+    [id, ck.firstEditable]);
+  const changes = future.map(r => {
+    const variant = date && r.day > date ? 'none' : r.source === 'default' ? defaultVariant(s, r.day, r.meal) : r.variant;
+    return variant === r.variant ? null : { student_id: id, day: r.day, meal: r.meal, variant, source: 'default' };
+  }).filter(Boolean);
+  await writeOrders(changes, user.id);
+  if (here) await fillStudent(ck, id);
+  // Meals after the date whose deadline has already passed stay ordered
+  const { rows: [{ n: locked }] } = date ? await db.query(
+    `select count(*)::int as n from orders where student_id = $1 and day > $2 and day < $3 and variant <> 'none'`,
+    [id, date, ck.firstEditable]) : { rows: [{ n: 0 }] };
+  return { student: s, cancelled: changes.filter(c => c.variant === 'none').length, locked };
+}
+
+// Students whose last day has passed: out of the lists, login closed. Runs once a day per server instance.
+let leaversDay = '';
+async function retireLeavers(ck) {
+  if (leaversDay === ck.today) return;
+  const db = getPool();
+  const { rows } = await db.query('update students set active = false where active and left_on < $1 returning id', [ck.today]);
+  if (rows.length) await db.query('update users set active = false where student_id = any($1::int[])', [rows.map(r => r.id)]);
+  leaversDay = ck.today;
+}
+
 // What each right may see of a student
 const DIET_FIELDS = ['diet', 'diet_reason', 'def_b', 'def_l', 'def_d', 'weekly'];
 const STUDENT_VIEW = {
-  full: ['id', 'ext_id', 'first_name', 'last_name', 'group_name', 'room', 'diet', 'diet_reason', 'notes', 'def_b', 'def_l', 'def_d', 'weekly', 'active'],
-  diets: ['id', 'first_name', 'last_name', 'group_name', 'diet', 'diet_reason', 'def_b', 'def_l', 'def_d', 'weekly', 'active'],
+  full: ['id', 'ext_id', 'first_name', 'last_name', 'group_name', 'room', 'diet', 'diet_reason', 'notes', 'def_b', 'def_l', 'def_d', 'weekly', 'active', 'left_on'],
+  diets: ['id', 'first_name', 'last_name', 'group_name', 'diet', 'diet_reason', 'def_b', 'def_l', 'def_d', 'weekly', 'active', 'left_on'],
 };
 const studentView = user => (can(user, 'students') ? STUDENT_VIEW.full : STUDENT_VIEW.diets);
 const pick = (row, keys) => Object.fromEntries(keys.filter(k => k in row).map(k => [k, row[k]]));
@@ -570,8 +613,8 @@ const actions = {
     const db = getPool();
     // group: one group name, '@mine' = the teacher's own groups, empty = the whole home
     const only = b.group === '@mine' ? (user.groups || []) : b.group ? [b.group] : null;
-    const params = [];
-    let where = 'where active';
+    const params = [b.from];
+    let where = 'where (active or left_on >= $1)';
     if (only) { params.push(only); where += ` and group_name = any($${params.length}::text[])`; }
     const cols = can(user, 'students') ? 'room, ' : '';
     const { rows: students } = await db.query(
@@ -580,7 +623,7 @@ const actions = {
     const { rows: orders } = await db.query(`
       select o.student_id, o.day, o.meal::text as meal, o.variant, o.source
       from orders o join students s on s.id = o.student_id
-      where o.day between $1 and $2 and s.active ${only ? 'and s.group_name = any($3::text[])' : ''}`,
+      where o.day between $1 and $2 and (s.active or s.left_on >= $1) ${only ? 'and s.group_name = any($3::text[])' : ''}`,
       only ? [b.from, b.to, only] : [b.from, b.to]);
     const { rows: groups } = await db.query(
       `select group_name, count(*)::int as n from students where active group by group_name order by group_name`);
@@ -648,6 +691,23 @@ const actions = {
       order by s.active desc, s.group_name, s.last_name, s.first_name`);
     const keys = [...studentView(user), ...(can(user, 'students') ? ['user_id', 'username', 'login_active', 'must_change', 'last_login'] : [])];
     return { students: rows.map(r => pick(r, keys)), full: can(user, 'students') };
+  },
+
+  // { id, date: last day in the home, reason }
+  async moveOut(b, user, ck) {
+    requireRight(user, 'students');
+    if (!isDate(b.date)) throw new HttpError(400, 'Vpišite datum izstopa');
+    const reason = String(b.reason || '').trim().slice(0, 200);
+    const r = await setLeftOn(ck, Number(b.id), b.date, reason, user);
+    await audit(user, 'student.moveOut', `${r.student.first_name} ${r.student.last_name}: zadnji dan ${b.date}${reason ? ', ' + reason : ''}`);
+    return { cancelled: r.cancelled, locked: r.locked };
+  },
+
+  async moveBack(b, user, ck) {
+    requireRight(user, 'students');
+    const r = await setLeftOn(ck, Number(b.id), null, '', user);
+    await audit(user, 'student.moveBack', `${r.student.first_name} ${r.student.last_name}`);
+    return { ok: true };
   },
 
   // Contacts and enrolment data of one student, loaded when the record is opened
@@ -1055,6 +1115,7 @@ export const handler = async (event) => {
     if (!fn) return json({ error: 'Neznano dejanje' }, 400);
     await init();
     const ck = await clock();
+    await retireLeavers(ck);
     const user = ['login', 'setup'].includes(body.action) ? null : await currentUser(event, ck.settings.secret);
     // A temporary password must be replaced before anything else
     if (user?.must_change && !['me', 'changePassword'].includes(body.action)) throw new HttpError(403, 'Najprej si nastavite svoje geslo');

@@ -40,6 +40,7 @@ export function mealServed(day, meal) {
 // What a student gets when nobody changed the day by hand:
 // the weekday exception if there is one (e.g. dry lunch every Wednesday), otherwise the default menu
 export function defaultVariant(student, day, meal) {
+  if (student.left_on && day > student.left_on) return 'none';
   return student.weekly?.[isoDow(day)]?.[meal] || student[DEF_COL[meal]];
 }
 

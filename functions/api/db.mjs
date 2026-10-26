@@ -104,6 +104,8 @@ alter table students add column if not exists diet_reason text not null default 
 alter table students add column if not exists ext_id text not null default '';
 -- Contact and enrolment data from the home's register (only for staff with the students right)
 alter table students add column if not exists details jsonb not null default '{}';
+-- Last day in the home; no meals after it, the student is moved out the day after
+alter table students add column if not exists left_on date;
 
 -- Student logins are linked to their student record; must_change forces a new password at the next login
 alter table users add column if not exists student_id int unique references students(id) on delete cascade;
