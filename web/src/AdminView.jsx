@@ -324,7 +324,7 @@ function MealSettings({ s, setS }) {
     try {
       await api('saveMealSettings', {
         school_year_start: s.school_year_start, school_year_end: s.school_year_end,
-        student_choices: s.student_choices, meal_times: s.meal_times,
+        student_choices: s.student_choices, meal_times: s.meal_times, student_can_cancel: !!s.student_can_cancel,
       });
       setMsg({ ok: true, text: 'Shranjeno. Osvežite stran, da bodo nove nastavitve veljale povsod.' });
     } catch (err) {
@@ -344,7 +344,7 @@ function MealSettings({ s, setS }) {
         <p className="hint">Vsi dijaki so samodejno prijavljeni po svojem privzetem meniju in izjemah za ves čas šolskega leta. Brez šolskega leta se naročila pripravijo štiri tedne vnaprej.</p>
 
         <fieldset className="weekly-field">
-          <legend>Kaj lahko dijaki izberejo sami <small>do roka za naročila; odjava je vedno mogoča</small></legend>
+          <legend>Kaj lahko dijaki izberejo sami <small>do roka za naročila</small></legend>
           <table className="weekly choices">
             <tbody>
               {MEALS.map(m => (
@@ -361,6 +361,11 @@ function MealSettings({ s, setS }) {
               ))}
             </tbody>
           </table>
+          <label className="inline-check student-cancel">
+            <input type="checkbox" checked={!!s.student_can_cancel} onChange={e => setS({ ...s, student_can_cancel: e.target.checked })} />
+            Dijaki se lahko sami odjavijo od obroka in prijavijo odsotnost
+          </label>
+          {!s.student_can_cancel && <p className="hint">Dijak si lahko spreminja le vrsto obroka. Odjavo in odsotnost zanj vpiše vzgojitelj.</p>}
         </fieldset>
 
         <fieldset className="weekly-field times-field">

@@ -90,17 +90,17 @@ export default function MyMealsView({ me }) {
                     <div key={m} className="my-meal">
                       <div className="my-meal-top">
                         <span className="my-meal-name">{MEAL_NAMES[m]}{me.times[m] && <small>{me.times[m]}</small>}</span>
-                        {locked || c || a ? (
+                        {locked || c || a || (!me.canCancel && v === 'none') ? (
                           <span className={`chip v-${v}`} title={VARIANT_LABEL[v]}>{VARIANT_SHORT[v]}</span>
                         ) : (
                           <select className={`my-select v-${v}`} value={v} disabled={busy === `${day}|${m}`} onChange={e => choose(day, m, e.target.value)}>
                             {options.map(x => <option key={x} value={x} disabled={!(me.choices[m] || []).includes(x)}>{VARIANT_LABEL[x]}</option>)}
-                            <option value="none">Ne bom jedel (odjava)</option>
+                            {me.canCancel && <option value="none">Ne bom jedel (odjava)</option>}
                             {o?.source === 'manual' && <option value="default">↺ Nazaj na privzeto</option>}
                           </select>
                         )}
                       </div>
-                      {(locked || c || a) && <span className="my-choice">{a && v === 'none' ? 'Odsoten' : VARIANT_LABEL[v]}</span>}
+                      {(locked || c || a || (!me.canCancel && v === 'none')) && <span className="my-choice">{a && v === 'none' ? 'Odsoten' : VARIANT_LABEL[v]}</span>}
                       {dish && <p className="my-dish">{dish}</p>}
                       {note && me.times[note] && <p className="my-note">{note === 'dry' ? 'Prevzem paketa' : 'Pozni obrok'}: {me.times[note]}</p>}
                     </div>
@@ -113,7 +113,7 @@ export default function MyMealsView({ me }) {
       )}
 
       <div className="my-bottom">
-        {data && <MyAbsences absences={data.absences} clock={clock} reload={load} setToast={setToast} />}
+        {data && <MyAbsences absences={data.absences} clock={clock} canCancel={me.canCancel} reload={load} setToast={setToast} />}
         <section className="my-card">
           <h3>Moji podatki</h3>
           <dl>
@@ -131,7 +131,7 @@ export default function MyMealsView({ me }) {
   );
 }
 
-function MyAbsences({ absences, clock, reload, setToast }) {
+function MyAbsences({ absences, clock, canCancel, reload, setToast }) {
   const [form, setForm] = useState(null);
   const [error, setError] = useState('');
 
@@ -164,8 +164,10 @@ function MyAbsences({ absences, clock, reload, setToast }) {
   return (
     <section className="my-card">
       <h3><CalendarOff size={16} /> Odsotnost</h3>
-      <p className="hint">Če te ne bo v domu (bolezen, ekskurzija, odhod domov), prijavi odsotnost. Za te dni boš odjavljen od vseh obrokov.</p>
-      {form ? (
+      {canCancel
+        ? <p className="hint">Če te ne bo v domu (bolezen, ekskurzija, odhod domov), prijavi odsotnost. Za te dni boš odjavljen od vseh obrokov.</p>
+        : <p className="hint">Če te ne bo v domu ali ne boš jedel, to sporoči vzgojitelju – on te odjavi od obrokov.</p>}
+      {!canCancel ? null : form ? (
         <form className="form" onSubmit={add}>
           <div className="form-pair">
             <label>Od<input type="date" value={form.from} min={clock.firstEditable} onChange={e => setForm({ ...form, from: e.target.value })} required /></label>
@@ -186,7 +188,7 @@ function MyAbsences({ absences, clock, reload, setToast }) {
           <li key={a.id}>
             <span><b>{fmtDay(a.day_from)}{a.day_to !== a.day_from ? ` – ${fmtDay(a.day_to)}` : ''}</b> {a.reason && <span className="muted">— {a.reason}</span>}
               {a.created_by_role && a.created_by_role !== 'student' && <small className="muted"> (vpisal {a.created_by_name})</small>}</span>
-            {a.day_to >= clock.firstEditable && a.created_by_role === 'student' && <button className="icon-btn" title="Prekliči" onClick={() => cancel(a)}><Trash2 size={14} /></button>}
+            {canCancel && a.day_to >= clock.firstEditable && a.created_by_role === 'student' && <button className="icon-btn" title="Prekliči" onClick={() => cancel(a)}><Trash2 size={14} /></button>}
           </li>
         ))}
       </ul>

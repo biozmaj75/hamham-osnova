@@ -483,6 +483,9 @@ function studentChoices(ck) {
   return Object.fromEntries(MEALS.map(m => [m, Array.isArray(saved?.[m]) ? VARIANTS[m].filter(v => saved[m].includes(v)) : VARIANTS[m]]));
 }
 
+// Off by default: students change only what they eat; deregistering and absences go through the staff
+const studentCanCancel = ck => ck.settings.student_can_cancel === '1';
+
 const mealTimes = ck => ({ B: '', L: '', D: '', late: '', dry: '', ...parseJson(ck.settings.meal_times, {}) });
 
 function cleanUsername(v) {
@@ -520,6 +523,7 @@ const actions = {
       const { rows } = await getPool().query('select first_name, last_name, group_name, room, diet from students where id = $1', [user.student_id]);
       out.student = rows[0];
       out.choices = studentChoices(ck);
+      out.canCancel = studentCanCancel(ck);
     }
     return out;
   },
@@ -764,6 +768,17 @@ const actions = {
     if (b.variant !== 'none' && b.variant !== 'default' && !allowed.includes(b.variant)) {
       throw new HttpError(400, 'Te vrste obroka ni mogoče izbrati');
     }
+    if (!studentCanCancel(ck)) {
+      if (b.variant === 'none') throw new HttpError(403, 'Odjavo od obroka uredi vzgojitelj');
+      // A meal the staff deregistered stays deregistered; the student can't sign up for it alone
+      const { rows: cur } = await getPool().query(
+        'select variant from orders where student_id = $1 and day = $2 and meal = $3', [user.student_id, b.day, b.meal]);
+      if ((cur[0]?.variant || 'none') === 'none') throw new HttpError(403, 'Za ta obrok nisi prijavljen. Prijavo uredi vzgojitelj.');
+      if (b.variant === 'default') {
+        const { rows: st } = await getPool().query('select * from students where id = $1', [user.student_id]);
+        if (defaultVariant(st[0], b.day, b.meal) === 'none') throw new HttpError(403, 'Odjavo od obroka uredi vzgojitelj');
+      }
+    }
     const { rows: away } = await getPool().query(
       'select 1 from absences where student_id = $1 and $2::date between day_from and day_to', [user.student_id, b.day]);
     if (away.length) throw new HttpError(400, 'Ta dan imaš prijavljeno odsotnost. Najprej jo prekliči.');
@@ -778,11 +793,13 @@ const actions = {
 
   async myAbsence(b, user, ck) {
     requireStudent(user);
+    if (!studentCanCancel(ck)) throw new HttpError(403, 'Odsotnost sporoči vzgojitelju');
     return { absence: await addAbsence(ck, user.student_id, b, user) };
   },
 
   async myCancelAbsence(b, user, ck) {
     requireStudent(user);
+    if (!studentCanCancel(ck)) throw new HttpError(403, 'Preklic odsotnosti uredi z vzgojiteljem');
     const { rows } = await getPool().query('select * from absences where id = $1 and student_id = $2', [b.id, user.student_id]);
     if (!rows[0]) throw new HttpError(400, 'Odsotnosti ni mogoče najti');
     if (rows[0].created_by !== user.id) throw new HttpError(403, 'To odsotnost je vpisal vzgojitelj; preklic uredi z njim');
@@ -934,7 +951,7 @@ const actions = {
     return {
       timezone: ck.timezone, cutoff_hour: ck.cutoffHour, closed,
       school_year_start: yearStart(ck), school_year_end: yearEnd(ck),
-      student_choices: studentChoices(ck), meal_times: mealTimes(ck),
+      student_choices: studentChoices(ck), meal_times: mealTimes(ck), student_can_cancel: studentCanCancel(ck),
     };
   },
 
@@ -952,7 +969,8 @@ const actions = {
     await setSetting('school_year_end', end);
     await setSetting('student_choices', JSON.stringify(choices));
     await setSetting('meal_times', JSON.stringify(times));
-    await audit(user, 'settings.meals', `šolsko leto ${start || '—'} – ${end || '—'}`);
+    await setSetting('student_can_cancel', b.student_can_cancel ? '1' : '');
+    await audit(user, 'settings.meals', `šolsko leto ${start || '—'} – ${end || '—'}, odjava dijakov ${b.student_can_cancel ? 'dovoljena' : 'ni dovoljena'}`);
     // Plan the whole school year right away so every screen shows it
     Object.assign(ck.settings, { school_year_start: start, school_year_end: end });
     await horizon(ck);

@@ -503,3 +503,4 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .pick-list li { break-inside: avoid; padding: 3px 0; }
 .pick-list .tag { margin-left: 4px; }
 @media (max-width: 700px) { .weekly-bulk-row { grid-template-columns: 1fr; } }
+.student-cancel { margin-top: 10px; }
