@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { readXlsx, excelDate } from './xlsx.js';
 import { DETAIL_FIELDS, detailColumns, rowDetails } from './details.js';
 import Modal from './Modal.jsx';
-import { loginSlipsPdf, downloadBlob } from './pdf.js';
+import { loginSlipsPdf, openPdf, pdfTab } from './pdf.js';
 import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, WEEKDAYS, DEF_COL, ROLE_NAME, fmtDay, studentName, plural } from './meals.js';
 
 const EMPTY = { first_name: '', last_name: '', group_name: '', room: '', diet: '', diet_reason: '', notes: '', def_b: 'normal', def_l: 'normal', def_d: 'normal', weekly: {}, active: true };
@@ -12,15 +12,22 @@ const EMPTY = { first_name: '', last_name: '', group_name: '', room: '', diet: '
 const fmtDate = d => d.split('-').reverse().map(Number).join('. ');
 const fmtTime = t => (t ? new Date(t).toLocaleString('sl-SI', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
-// Issues logins (new ones, or new temporary passwords) and downloads the slips to print
-async function printLogins(studentIds, me) {
-  const { sheets } = await api('studentLogins', { student_ids: studentIds });
-  if (!sheets.length) return sheets;
+// Issues logins (new ones, or new temporary passwords) and opens the slips to print in `win` (see pdfTab)
+async function printLogins(studentIds, me, win) {
+  let sheets;
+  try {
+    ({ sheets } = await api('studentLogins', { student_ids: studentIds }));
+  } catch (err) {
+    win?.close();
+    throw err;
+  }
+  if (!sheets.length) { win?.close(); return { sheets }; }
   const today = new Date().toISOString().slice(0, 10);
-  downloadBlob(loginSlipsPdf(sheets, {
+  const filename = `dostopi-${sheets.length === 1 ? sheets[0].username : today}.pdf`;
+  const url = openPdf(loginSlipsPdf(sheets, {
     home: 'Dijaški dom', url: window.location.origin, date: fmtDate(today), issuer: `${me.user.name}, ${ROLE_NAME[me.user.role].toLowerCase()}`,
-  }), `dostopi-${sheets.length === 1 ? sheets[0].username : today}.pdf`);
-  return sheets;
+  }), filename, win);
+  return { sheets, url, filename };
 }
 
 function LoginState({ s }) {
@@ -477,15 +484,19 @@ function LoginBox({ student, me, onChanged }) {
   const [s, setS] = useState(student);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [asking, setAsking] = useState(false);
+  const [issued, setIssued] = useState(null); // { username, password, url, filename }
   const canLock = me.rights.includes('users') && s.user_id;
 
   async function issue() {
-    if (s.username && !confirm(`${studentName(s)} dobi novo začasno geslo, staro preneha veljati. Nadaljujem?`)) return;
+    const win = pdfTab(); // before any await, or the browser blocks the tab
+    setAsking(false);
     setBusy(true);
+    setMsg(null);
     try {
-      const [sheet] = await printLogins([s.id], me);
+      const { sheets: [sheet], url, filename } = await printLogins([s.id], me, win);
       setS({ ...s, username: sheet.username, must_change: true, login_active: s.login_active ?? true });
-      setMsg({ ok: true, text: `PDF z dostopom je prenesen. Natisnite ga in ga izročite dijaku. Geslo: ${sheet.password}` });
+      setIssued({ username: sheet.username, password: sheet.password, url, filename });
       onChanged();
     } catch (err) {
       setMsg({ ok: false, text: err.message });
@@ -513,8 +524,8 @@ function LoginBox({ student, me, onChanged }) {
           {s.last_login ? <span className="muted"> · zadnja prijava {fmtTime(s.last_login)}</span> : <span className="muted"> · še ni bil prijavljen</span>}</p>
       ) : <p className="muted">Dijak še nima dostopa. Ustvarite ga, natisnite listek in mu ga izročite.</p>}
       <div className="box-actions">
-        <button type="button" className="btn small" onClick={issue} disabled={busy}>
-          <KeyRound size={14} /> {s.username ? 'Novo začasno geslo (PDF)' : 'Ustvari dostop (PDF)'}
+        <button type="button" className="btn small" onClick={() => (s.username ? setAsking(true) : issue())} disabled={busy || asking}>
+          <KeyRound size={14} /> {busy ? 'Pripravljam PDF …' : s.username ? 'Novo začasno geslo (PDF)' : 'Ustvari dostop (PDF)'}
         </button>
         {canLock && (
           <button type="button" className="btn small ghost" onClick={toggleLock} disabled={busy}>
@@ -522,6 +533,25 @@ function LoginBox({ student, me, onChanged }) {
           </button>
         )}
       </div>
+      {asking && (
+        <div className="confirm-box">
+          <p>{studentName(s)} dobi novo začasno geslo, staro takoj preneha veljati.</p>
+          <div className="box-actions">
+            <button type="button" className="btn small primary" onClick={issue}>Da, izdaj geslo in odpri PDF</button>
+            <button type="button" className="btn small ghost" onClick={() => setAsking(false)}>Prekliči</button>
+          </div>
+        </div>
+      )}
+      {issued && (
+        <div className="issued-box">
+          <p>Novo začasno geslo je izdano. PDF se je odprl v novem zavihku – natisnite ga in listek izročite dijaku.</p>
+          <dl><dt>Uporabniško ime</dt><dd className="mono">{issued.username}</dd><dt>Začasno geslo</dt><dd className="mono">{issued.password}</dd></dl>
+          <div className="box-actions">
+            <a className="btn small" href={issued.url} target="_blank" rel="noreferrer">Odpri PDF</a>
+            <a className="btn small ghost" href={issued.url} download={issued.filename}>Prenesi PDF</a>
+          </div>
+        </div>
+      )}
       {msg && <p className={msg.ok ? 'success' : 'error'}>{msg.text}</p>}
     </section>
   );
@@ -711,11 +741,11 @@ function LoginsDialog({ students, groups, initialGroup, me, onClose }) {
   const target = mode === 'missing' ? inGroup.filter(s => !s.username) : inGroup;
 
   async function run() {
-    if (mode === 'all' && !confirm(`${target.length} dijakov dobi novo začasno geslo; stara gesla prenehajo veljati. Nadaljujem?`)) return;
+    const win = pdfTab(); // before any await, or the browser blocks the tab
     setBusy(true);
     setError('');
     try {
-      setDone(await printLogins(target.map(s => s.id), me));
+      setDone(await printLogins(target.map(s => s.id), me, win));
     } catch (err) {
       setError(err.message);
     }
@@ -726,7 +756,13 @@ function LoginsDialog({ students, groups, initialGroup, me, onClose }) {
     <Modal title="Dostopi za dijake" onClose={onClose}>
       {done ? (
         <div className="form">
-          <p className="success">PDF z {done.length} {plural(done.length, 'listkom', 'listkoma', 'listki', 'listki')} je prenesen. Natisnite ga, razrežite in listke izročite dijakom.</p>
+          <p className="success">PDF z {done.sheets.length} {plural(done.sheets.length, 'listkom', 'listkoma', 'listki', 'listki')} se je odprl v novem zavihku. Natisnite ga, razrežite in listke izročite dijakom.</p>
+          {done.url && (
+            <div className="box-actions">
+              <a className="btn small" href={done.url} target="_blank" rel="noreferrer">Odpri PDF</a>
+              <a className="btn small ghost" href={done.url} download={done.filename}>Prenesi PDF</a>
+            </div>
+          )}
           <p className="hint">Gesla se ne shranijo v berljivi obliki. Če PDF izgubite, izdajte nova gesla.</p>
           <div className="form-actions"><button className="btn primary" onClick={onClose}>Zapri</button></div>
         </div>
@@ -740,6 +776,7 @@ function LoginsDialog({ students, groups, initialGroup, me, onClose }) {
           </label>
           <label className="inline-check"><input type="radio" name="mode" checked={mode === 'missing'} onChange={() => setMode('missing')} /> Samo dijaki brez dostopa ({inGroup.filter(s => !s.username).length})</label>
           <label className="inline-check"><input type="radio" name="mode" checked={mode === 'all'} onChange={() => setMode('all')} /> Vsi dijaki v skupini, z novimi gesli ({inGroup.length})</label>
+          {mode === 'all' && <p className="warn-text">Pozor: stara gesla teh dijakov takoj prenehajo veljati.</p>}
           <p className="hint">Prenese se PDF s tremi listki na stran: uporabniško ime, začasno geslo in naslov aplikacije. Ob prvi prijavi si dijak izbere svoje geslo.</p>
           {error && <p className="error">{error}</p>}
           <div className="form-actions">

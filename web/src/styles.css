@@ -512,3 +512,11 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .details-field { border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 14px 14px; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 14px; }
 .details-field legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
 .details-field label > span a { font-weight: 400; font-size: 12px; margin-left: 6px; }
+
+/* New password: confirmation and result in the student card */
+.confirm-box, .issued-box { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--paper); }
+.confirm-box p, .issued-box p { margin: 0 0 8px; }
+.issued-box dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 10px; }
+.issued-box dt { color: var(--ink-2); }
+.issued-box dd { margin: 0; font-weight: 600; }
+.warn-text { color: #a4471c; font-size: 13px; margin: 0; }

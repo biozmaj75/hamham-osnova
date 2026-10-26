@@ -89,6 +89,22 @@ export function loginSlipsPdf(sheets, meta) {
   return new Blob([bytes], { type: 'application/pdf' });
 }
 
+// Shows the PDF in a tab opened beforehand (window.open must run in the click itself, before any await),
+// or downloads it when the browser blocked the tab. Returns the object URL for "open again" links.
+export function openPdf(blob, filename, win) {
+  const url = URL.createObjectURL(blob);
+  if (win && !win.closed) win.location.href = url;
+  else downloadBlob(blob, filename);
+  return url;
+}
+
+// A tab for a PDF that is still being prepared; call synchronously in a click handler
+export function pdfTab() {
+  const win = window.open('', '_blank');
+  if (win) win.document.write('<p style="font:16px sans-serif;padding:24px">Pripravljam PDF …</p>');
+  return win;
+}
+
 export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
