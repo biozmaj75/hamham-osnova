@@ -145,6 +145,17 @@ create table if not exists attendance_absences (
 );
 create index if not exists attendance_absences_idx on attendance_absences(day_to, day_from);
 
+-- A teacher's note to the night guard for one evening, e.g. a planned late arrival after training
+create table if not exists attendance_notes (
+  student_id int not null references students(id) on delete cascade,
+  night date not null,
+  late_at text not null default '',
+  note text not null default '',
+  created_by int references users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (student_id, night)
+);
+
 -- Absences: every meal in the range is deregistered; cancelling restores the default menu
 create table if not exists absences (
   id serial primary key,

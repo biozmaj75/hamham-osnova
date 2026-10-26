@@ -978,15 +978,19 @@ const actions = {
     // Students with at least one meal ordered the next day: if they are not in the home that evening,
     // the teacher should check whether the meals are right
     await materialize(ck, addDays(last, 1));
-    const { rows: fed } = await db.query(`
-      select distinct student_id, (day - 1)::date as night from orders
+    const { rows: meals } = await db.query(`
+      select student_id, day, meal, variant from orders
       where variant <> 'none' and day between $1::date + 1 and $2::date + 1`, [b.sunday, last]);
+    const { rows: notes } = await db.query(`
+      select n.student_id, n.night, n.late_at, n.note, n.created_at, coalesce(u.name, '') as by_name
+      from attendance_notes n left join users u on u.id = n.created_by
+      where n.night between $1 and $2`, [b.sunday, last]);
     const { rows: away } = await db.query(`
       select a.id, a.student_id, a.day_from, a.day_to, a.reason, a.created_at, coalesce(u.name, '') as by_name
       from attendance_absences a left join users u on u.id = a.created_by
       where a.day_to >= $1 and a.day_from <= $2 order by a.day_from`, [b.sunday, last]);
     const slots = Object.keys(SLOT_ROLES).filter(k => SLOT_ROLES[k].includes(user.role));
-    return { nights, students, marks, fed, away, slots, canAway: AWAY_ROLES.includes(user.role), today: ck.today };
+    return { nights, students, marks, meals, notes, away, slots, canAway: AWAY_ROLES.includes(user.role), canOrders: can(user, 'orders'), today: ck.today, firstEditable: ck.firstEditable };
   },
 
   // { student_id, night, slot, present }
@@ -1035,6 +1039,29 @@ const actions = {
       [ids, b.from, b.to, reason, user.id]);
     await audit(user, 'attendance.absence', `${rows.map(r => r.name).join(', ')}, ${b.from} – ${b.to}: ${reason}`);
     return { added: rows.length };
+  },
+
+  // { student_id, night, late_at, note } — note for the night guard; both empty removes it
+  async setAttendanceNote(b, user, ck) {
+    requireRight(user, 'attendance');
+    if (!AWAY_ROLES.includes(user.role)) throw new HttpError(403, 'Opombe za varnostnika vpisujejo vzgojitelji');
+    if (!isDate(b.night) || (isoDow(b.night) > 4 && isoDow(b.night) !== 7)) throw new HttpError(400, 'Neveljaven dan');
+    if (b.night < ck.today) throw new HttpError(400, 'Opombo lahko vpišete za današnji ali prihodnji večer');
+    const late = String(b.late_at || '').trim();
+    if (late && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(late)) throw new HttpError(400, 'Vpišite uro prihoda, npr. 23:00');
+    const note = String(b.note || '').trim().slice(0, 300);
+    const id = Number(b.student_id);
+    const db = getPool();
+    if (!late && !note) {
+      await db.query('delete from attendance_notes where student_id = $1 and night = $2', [id, b.night]);
+      return { ok: true };
+    }
+    const { rows } = await db.query('select 1 from students where id = $1', [id]);
+    if (!rows[0]) throw new HttpError(400, 'Dijaka ni mogoče najti');
+    await db.query(`insert into attendance_notes (student_id, night, late_at, note, created_by) values ($1, $2, $3, $4, $5)
+      on conflict (student_id, night) do update set late_at = $3, note = $4, created_by = $5, created_at = now()`,
+      [id, b.night, late, note, user.id]);
+    return { ok: true };
   },
 
   // A future absence is removed; one that has already begun ends yesterday
