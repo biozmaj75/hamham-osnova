@@ -526,3 +526,4 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .move-out-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
 .move-out-fields label { display: grid; gap: 4px; font-size: 13px; }
 @media (max-width: 600px) { .move-out-fields { grid-template-columns: 1fr; } }
+.address-hit { display: block; color: var(--ink-2); font-size: 12px; margin-top: 2px; }

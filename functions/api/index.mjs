@@ -688,10 +688,12 @@ const actions = {
   async students(b, user) {
     requireRight(user, 'diets');
     const { rows } = await getPool().query(`
-      select s.*, u.id as user_id, u.username, u.active as login_active, u.must_change, u.last_login
+      select s.*, u.id as user_id, u.username, u.active as login_active, u.must_change, u.last_login,
+        concat_ws(', ', nullif(concat_ws(' ', s.details->>'post_code', s.details->>'post'), ''), s.details->>'address',
+          'občina ' || (s.details->>'municipality'), s.details->>'temp_address') as address
       from students s left join users u on u.student_id = s.id
       order by s.active desc, s.group_name, s.last_name, s.first_name`);
-    const keys = [...studentView(user), ...(can(user, 'students') ? ['user_id', 'username', 'login_active', 'must_change', 'last_login'] : [])];
+    const keys = [...studentView(user), ...(can(user, 'students') ? ['user_id', 'username', 'login_active', 'must_change', 'last_login', 'address'] : [])];
     return { students: rows.map(r => pick(r, keys)), full: can(user, 'students') };
   },
 

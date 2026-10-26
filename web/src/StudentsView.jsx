@@ -14,6 +14,8 @@ const fmtDate = d => d.split('-').reverse().map(Number).join('. ');
 // Moved out, or leaving on a set date: shown only under "Prikaži izseljene"
 const isGone = s => !s.active || !!s.left_on;
 const localToday = () => new Date().toLocaleDateString('sv-SE');
+// Search ignores case and č/š/ž, so "skofja" finds Škofja Loka
+const fold = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const fmtTime = t => (t ? new Date(t).toLocaleString('sl-SI', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 // Issues logins (new ones, or new temporary passwords) and opens the slips to print in `win` (see pdfTab)
@@ -66,10 +68,10 @@ export default function StudentsView({ me }) {
   const groups = useMemo(() => [...new Set((students || []).map(s => s.group_name).filter(Boolean))].sort(), [students]);
 
   const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = fold(query.trim());
     const inGroup = s => !group || (group === '@mine' ? myGroups.includes(s.group_name) : s.group_name === group);
     return (students || []).filter(s => showInactive === isGone(s) && inGroup(s)
-      && (!q || `${s.first_name} ${s.last_name} ${s.group_name} ${s.room || ''} ${s.diet}`.toLowerCase().includes(q)));
+      && (!q || fold(`${s.first_name} ${s.last_name} ${s.group_name} ${s.room || ''} ${s.diet} ${s.address || ''}`).includes(q)));
   }, [students, query, showInactive, group]);
 
   const activeCount = (students || []).filter(s => !isGone(s)).length;
@@ -83,7 +85,7 @@ export default function StudentsView({ me }) {
           <option value="">Cel dom – vse skupine</option>
           {groups.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
-        <label className="search"><Search size={15} /><input placeholder={full ? 'Išči ime, skupino, sobo, dieto' : 'Išči ime, skupino, dieto'} value={query} onChange={e => setQuery(e.target.value)} /></label>
+        <label className="search"><Search size={15} /><input placeholder={full ? 'Išči ime, skupino, sobo, dieto, kraj' : 'Išči ime, skupino, dieto'} value={query} onChange={e => setQuery(e.target.value)} /></label>
         <label className="inline-check"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Prikaži izseljene</label>
         {full && <button className="btn" onClick={() => setLogins(true)}><KeyRound size={16} /> Dostopi za dijake</button>}
         {full && <button className="btn" onClick={() => setWeeklyBulk(true)}><CalendarClock size={16} /> Stalne izjeme</button>}
@@ -101,7 +103,8 @@ export default function StudentsView({ me }) {
             <tbody>
               {shown.map(s => (
                 <tr key={s.id} className={s.active ? '' : 'inactive'} onClick={() => setEditing({ ...s })}>
-                  <td><strong>{studentName(s)}</strong>{isGone(s) && <em className="tag">{s.left_on ? `izstop ${fmtDate(s.left_on)}` : 'izseljen'}</em>}</td>
+                  <td><strong>{studentName(s)}</strong>{isGone(s) && <em className="tag">{s.left_on ? `izstop ${fmtDate(s.left_on)}` : 'izseljen'}</em>}
+                    {query.trim() && s.address && fold(s.address).includes(fold(query.trim())) && <small className="address-hit">{s.address}</small>}</td>
                   <td>{s.group_name}</td>
                   {full && <td>{s.room}</td>}
                   <td className="defaults">
