@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search, Plus, Clock, UtensilsCrossed, CalendarOff, MessageSquare } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Plus, Clock, UtensilsCrossed, CalendarOff, MessageSquare, ShieldAlert, DoorOpen } from 'lucide-react';
 import { api } from './api.js';
 import { addDays, dow, dayShort, fmtDay, fmtLong, capitalize, studentName, plural, MEALS, MEAL_NAMES, VARIANT_LABEL } from './meals.js';
 import Modal from './Modal.jsx';
@@ -9,6 +9,7 @@ const sundayOf = day => addDays(day, -dow(day));
 const fmtTime = t => new Date(t).toLocaleString('sl-SI', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 const key = (sid, night, slot) => `${sid}|${night}|${slot}`;
 const REASONS = ['bolezen', 'praksa', 'izmenjava', 'večdnevni izlet', 'ekskurzija', 'tekmovanje', 'osebni razlogi'];
+const GUARD_TAGS = ['prišel prepozno', 'motil nočni mir', 'prižgana luč prepozno', 'obnašal se je nenavadno', 'ni prišel'];
 const span = a => (a.day_from === a.day_to ? fmtDay(a.day_from) : `${fmtDay(a.day_from)} – ${fmtDay(a.day_to)}`);
 
 // Evening attendance Sunday–Thursday. On an arrival evening (Sunday or the evening of a holiday) students
@@ -25,6 +26,7 @@ export default function AttendanceView({ me }) {
   const [mealsFor, setMealsFor] = useState(null);
   const [noteFor, setNoteFor] = useState(null);
   const [menu, setMenu] = useState(null);
+  const [reportFor, setReportFor] = useState(null);
 
   const load = useCallback(async (week, quiet) => {
     if (!quiet) setData(null);
@@ -68,6 +70,8 @@ export default function AttendanceView({ me }) {
     return m;
   }, [data]);
   const notes = useMemo(() => new Map((data?.notes || []).map(n => [`${n.student_id}|${n.night}`, n])), [data]);
+  const reports = useMemo(() => new Map((data?.reports || []).map(r => [`${r.student_id}|${r.night}`, r])), [data]);
+  const canReport = night => data.canReport && night <= data.today && night >= data.reportFrom;
   const absenceOn = (sid, night) => (data?.away || []).find(a => a.student_id === sid && night >= a.day_from && night <= a.day_to);
   const present = (sid, night) => ['night', 'guard', 'teacher'].some(slot => marks.has(key(sid, night, slot)));
   // The roll call of an evening has started once anybody is ticked; earlier evenings count as finished
@@ -91,6 +95,10 @@ export default function AttendanceView({ me }) {
     if (data.canAway && night >= data.today) {
       items.push({ icon: Clock, label: notes.has(`${s.id}|${night}`) ? 'Uredi pozen prihod / opombo' : 'Pozen prihod / opomba za varnostnika', run: () => setNoteFor({ student: s, night }) });
       items.push({ icon: CalendarOff, label: 'Odsotnost …', run: () => setAwayFor({ ...s, from: night }) });
+    }
+    if (canReport(night)) {
+      const r = reports.get(`${s.id}|${night}`);
+      items.push({ icon: DoorOpen, label: r ? 'Uredi zapis varnostnika …' : 'Dejanski prihod / opomba varnostnika …', run: () => setReportFor({ student: s, night }) });
     }
     if (data.canOrders && fed.has(`${s.id}|${night}`)) items.push({ icon: UtensilsCrossed, label: 'Odjava prehrane naslednji dan …', run: () => openMeals(s, night) });
     if (!items.length) return;
@@ -142,6 +150,7 @@ export default function AttendanceView({ me }) {
         <label className="search"><Search size={15} /><input placeholder="Išči dijaka ali sobo" value={query} onChange={e => setQuery(e.target.value)} /></label>
       </div>
       {error && <p className="error banner">{error}</p>}
+      {data && <GuardReports reports={data.reports} students={shown} canEdit={canReport} onOpen={(student, night) => setReportFor({ student, night })} />}
       {!data ? <p className="muted pad">Nalaganje …</p> : (
         <div className="att-wrap">
           <table className="att">
@@ -187,16 +196,20 @@ export default function AttendanceView({ me }) {
                       // On an arrival evening the note sits in the guard's column
                       const showNote = note && c.slot !== 'teacher';
                       const fixMeals = alarm && data.canOrders;
+                      const report = c.slot !== 'teacher' && reports.get(`${s.id}|${c.night.day}`);
+                      // A planned late arrival the guard has not recorded yet: one click to record it
+                      const lateOpen = showNote && note.late_at && !report && canReport(c.night.day);
                       const title = [
                         m ? `${SLOT_NAME[c.slot]}: označil ${m.by_name || '—'}, ${fmtTime(m.checked_at)}` : '',
                         absent ? `Odsoten ${span(absent)}: ${absent.reason}` : '',
                         note ? `Opomba za varnostnika${note.late_at ? ` – pozen prihod ob ${note.late_at}` : ''}${note.note ? `: ${note.note}` : ''} (${note.by_name || '—'})` : '',
+                        report ? `Zapis varnostnika${report.arrived_at ? ` – prišel ob ${report.arrived_at}` : ''}${report.note ? `: ${report.note}` : ''} (${report.by_name || '—'}, ${fmtTime(report.created_at)})` : '',
                         alarm ? `Dijaka ni v domu, naslednji dan pa ima naročene obroke – preverite prehrano${fixMeals ? ' (klik za odjavo)' : ''}` : '',
                         !m && !future && !data.slots.includes(c.slot) ? `Ta stolpec odkljuka ${c.slot === 'guard' ? 'nočni varnostnik' : 'dežurni vzgojitelj'}` : '',
                       ].filter(Boolean).join('\n');
                       return (
                         <td key={c.night.day + c.slot} title={title}
-                          className={`${c.night.day === today ? 'today' : ''}${m ? ' on' : ''}${absent ? ' absent' : ''}${alarm ? ' warn' : ''}${note ? ' noted' : ''}${fixMeals ? ' clickable' : ''}`}
+                          className={`${c.night.day === today ? 'today' : ''}${m ? ' on' : ''}${absent ? ' absent' : ''}${alarm ? ' warn' : ''}${note ? ' noted' : ''}${report ? ' reported' : ''}${fixMeals ? ' clickable' : ''}`}
                           onClick={fixMeals ? e => { if (!e.target.closest('label, button')) openMeals(s, c.night.day); } : undefined}
                           onContextMenu={e => openMenu(e, s, c.night.day)}>
                           {!future && (
@@ -211,6 +224,14 @@ export default function AttendanceView({ me }) {
                               {note.note && <em>{note.note}</em>}
                             </span>
                           )}
+                          {report && (
+                            <button className="guard-tag" onClick={canReport(c.night.day) ? () => setReportFor({ student: s, night: c.night.day }) : undefined}
+                              disabled={!canReport(c.night.day)} title={report.note || 'Zapis varnostnika'}>
+                              <ShieldAlert size={11} />{report.arrived_at && ` ${report.arrived_at}`}
+                              {report.note && <em>{report.note}</em>}
+                            </button>
+                          )}
+                          {lateOpen && <button className="att-arrived" onClick={() => setReportFor({ student: s, night: c.night.day })} title="Vpiši dejanski prihod"><DoorOpen size={12} /> prišel</button>}
                           {fixMeals && <button className="att-meals" onClick={() => openMeals(s, c.night.day)} title="Odjavi prehrano naslednji dan"><UtensilsCrossed size={12} /> odjavi</button>}
                           {future && !absent && data.canAway && (
                             <button className="att-plan" onClick={() => setAwayFor({ ...s, from: c.night.day })} title="Vpiši odsotnost" aria-label={`Odsotnost ${studentName(s)} ${dayShort(c.night.day)}`}><Plus size={13} /></button>
@@ -242,16 +263,22 @@ export default function AttendanceView({ me }) {
         <span><i className="sw absent" />napovedana odsotnost</span>
         <span><i className="sw warn" />ni v domu, naslednji dan pa ima naročene obroke – preverite prehrano{data?.canOrders ? ' (klik odpre odjavo)' : ''}</span>
         <span><Clock size={12} className="lg-icon" />načrtovan pozen prihod / opomba za varnostnika</span>
+        <span><ShieldAlert size={12} className="lg-icon guard" />zapis nočnega varnostnika (dejanski prihod, opombe)</span>
       </div>
       <p className="hint att-hint">Kljukico postavite, ko se dijak zvečer javi v domu. Ob nedeljah oziroma ob prihodu po prazniku dijaka odkljukata nočni varnostnik in dežurni vzgojitelj, vsak v svojem stolpcu.
         {data?.canAway && ' Odsotnost za naprej (bolezen, praksa, izmenjava, izlet …) vpišete s klikom na ime dijaka ali na + pri prihodnjem večeru. Vpis odsotnosti ne spreminja prehrane.'}
-        {data?.canAway && ' Z desnim klikom na polje vpišete pozen prihod ali opombo za nočnega varnostnika (npr. trening, pride ob 23.00).'} Podatki se osvežijo vsako minuto.</p>
+        {data?.canAway && ' Z desnim klikom na polje vpišete pozen prihod ali opombo za nočnega varnostnika (npr. trening, pride ob 23.00).'} {data?.canReport && ' Dejanski prihod in opombe o noči (nočni mir, luč, vedenje …) vpišete z desnim klikom na polje dijaka ali z gumbom »prišel« pri napovedanem poznem prihodu. Vpis ure prihoda dijaka tudi odkljuka.'}
+        {data?.canAway && ' Zapise nočnega varnostnika preberete nad preglednico ali ob polju z ikono ščita.'} Podatki se osvežijo vsako minuto.</p>
       {awayFor && (
         <AwayDialog student={awayFor} from={awayFor.from} today={data.today} absences={data.away.filter(a => a.student_id === awayFor.id)}
           onClose={() => setAwayFor(null)} onSaved={() => load(sunday, true)} />
       )}
       {mealsFor && <MealsDialog {...mealsFor} firstEditable={data.firstEditable} onClose={() => setMealsFor(null)} onSaved={() => load(sunday, true)} />}
       {noteFor && <NoteDialog {...noteFor} note={notes.get(`${noteFor.student.id}|${noteFor.night}`)} onClose={() => setNoteFor(null)} onSaved={() => load(sunday, true)} />}
+      {reportFor && (
+        <ReportDialog {...reportFor} report={reports.get(`${reportFor.student.id}|${reportFor.night}`)} note={notes.get(`${reportFor.student.id}|${reportFor.night}`)}
+          onClose={() => setReportFor(null)} onSaved={() => load(sunday, true)} />
+      )}
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
     </div>
   );
@@ -367,6 +394,88 @@ function NoteDialog({ student, night, note, onClose, onSaved }) {
         <div className="box-actions span2">
           <button className="btn primary" disabled={busy || (!late && !text.trim())}>{busy ? 'Shranjevanje …' : 'Shrani'}</button>
           {note && <button type="button" className="btn ghost" disabled={busy} onClick={() => save('', '')}>Odstrani opombo</button>}
+          <button type="button" className="btn ghost" onClick={onClose}>Zapri</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// The night guard's records for the shown students, latest evening first, so the teachers can read them next day
+function GuardReports({ reports, students, canEdit, onOpen }) {
+  const [open, setOpen] = useState(true);
+  const byId = new Map(students.map(s => [s.id, s]));
+  const list = reports.filter(r => byId.has(r.student_id)).sort((a, b) => b.night.localeCompare(a.night) || a.student_id - b.student_id);
+  if (!list.length) return null;
+  const nights = [...new Set(list.map(r => r.night))];
+  return (
+    <section className="guard-reports">
+      <button className="guard-reports-head" onClick={() => setOpen(!open)}>
+        <ShieldAlert size={16} /> <strong>Zapisi nočnega varnostnika</strong> <span className="muted">({list.length})</span>
+        <ChevronRight size={15} className={open ? 'rot' : ''} />
+      </button>
+      {open && nights.map(n => (
+        <div key={n} className="guard-reports-night">
+          <h4>{capitalize(fmtLong(n))} zvečer</h4>
+          <ul>
+            {list.filter(r => r.night === n).map(r => {
+              const s = byId.get(r.student_id);
+              return (
+                <li key={r.student_id}>
+                  <b>{studentName(s)}</b>{s.room && <small className="muted"> · soba {s.room}</small>}
+                  {r.arrived_at && <span className="arr"><DoorOpen size={12} /> prišel ob {r.arrived_at}</span>}
+                  {r.note && <span className="txt">{r.note}</span>}
+                  <small className="muted"> — {r.by_name || '—'}, {fmtTime(r.created_at)}</small>
+                  {canEdit(n) && <button className="btn small ghost" onClick={() => onOpen(s, n)}>Uredi</button>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function ReportDialog({ student, night, report, note, onClose, onSaved }) {
+  const [arrived, setArrived] = useState(report?.arrived_at || '');
+  const [text, setText] = useState(report?.note || '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const addTag = t => setText(v => (v.includes(t) ? v : v.trim() ? `${v.trim().replace(/[.,;]$/, '')}, ${t}` : capitalize(t)));
+
+  async function save(arrivedAt, noteText) {
+    setBusy(true);
+    setError('');
+    try {
+      await api('setGuardReport', { student_id: student.id, night, arrived_at: arrivedAt, note: noteText });
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={`Zapis varnostnika – ${studentName(student)}`} onClose={onClose}>
+      <form className="att-away-form" onSubmit={e => { e.preventDefault(); save(arrived, text); }}>
+        <p className="span2 muted">{capitalize(fmtLong(night))} zvečer</p>
+        {note && (
+          <p className="span2 guard-planned"><Clock size={13} /> Vzgojitelj: {note.late_at ? `načrtovan prihod ob ${note.late_at}` : ''}{note.late_at && note.note ? ' · ' : ''}{note.note}</p>
+        )}
+        <label>Dejanski prihod ob<input type="time" value={arrived} onChange={e => setArrived(e.target.value)} autoFocus /></label>
+        <div className="span2 guard-chips">
+          {GUARD_TAGS.map(t => <button type="button" key={t} className="guard-chip" onClick={() => addTag(t)}>{t}</button>)}
+        </div>
+        <label className="span2">Opombe za vzgojitelja
+          <textarea rows={3} value={text} onChange={e => setText(e.target.value)} placeholder="npr. prišel pol ure prepozno, po 23. uri je imel prižgano luč" maxLength={500} />
+        </label>
+        <p className="hint span2">Zapis vidijo vzgojitelji v preglednici prisotnosti. Vpis ure prihoda dijaka tudi odkljuka kot prisotnega.</p>
+        {error && <p className="error span2">{error}</p>}
+        <div className="box-actions span2">
+          <button className="btn primary" disabled={busy || (!arrived && !text.trim())}>{busy ? 'Shranjevanje …' : 'Shrani'}</button>
+          {report && <button type="button" className="btn ghost" disabled={busy} onClick={() => save('', '')}>Odstrani zapis</button>}
           <button type="button" className="btn ghost" onClick={onClose}>Zapri</button>
         </div>
       </form>

@@ -45,6 +45,10 @@ const SLOT_ROLES = {
 };
 // Who may announce that a student will be away in the evenings
 const AWAY_ROLES = ['admin', 'principal', 'teacher'];
+// Who writes the night guard's records (actual arrival, remarks about the night)
+const REPORT_ROLES = ['admin', 'principal', 'guard'];
+// The guard's shift runs past midnight, so records can be written for the last few evenings too
+const REPORT_DAYS_BACK = 3;
 // Rights that can be granted to a single staff account on top of its role
 const EXTRA_RIGHTS = ['orders', 'menu', 'mealSettings', 'report'];
 const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office', 'guard'];
@@ -989,8 +993,13 @@ const actions = {
       select a.id, a.student_id, a.day_from, a.day_to, a.reason, a.created_at, coalesce(u.name, '') as by_name
       from attendance_absences a left join users u on u.id = a.created_by
       where a.day_to >= $1 and a.day_from <= $2 order by a.day_from`, [b.sunday, last]);
+    const { rows: reports } = await db.query(`
+      select r.student_id, r.night, r.arrived_at, r.note, r.created_at, coalesce(u.name, '') as by_name
+      from guard_reports r left join users u on u.id = r.created_by
+      where r.night between $1 and $2`, [b.sunday, last]);
     const slots = Object.keys(SLOT_ROLES).filter(k => SLOT_ROLES[k].includes(user.role));
-    return { nights, students, marks, meals, notes, away, slots, canAway: AWAY_ROLES.includes(user.role), canOrders: can(user, 'orders'), today: ck.today, firstEditable: ck.firstEditable };
+    return { nights, students, marks, meals, notes, reports, away, slots, canAway: AWAY_ROLES.includes(user.role),
+      canReport: REPORT_ROLES.includes(user.role), reportFrom: addDays(ck.today, -REPORT_DAYS_BACK), canOrders: can(user, 'orders'), today: ck.today, firstEditable: ck.firstEditable };
   },
 
   // { student_id, night, slot, present }
@@ -1062,6 +1071,40 @@ const actions = {
       on conflict (student_id, night) do update set late_at = $3, note = $4, created_by = $5, created_at = now()`,
       [id, b.night, late, note, user.id]);
     return { ok: true };
+  },
+
+  // { student_id, night, arrived_at, note } — both empty removes the record. An arrival time also ticks the student present.
+  async setGuardReport(b, user, ck) {
+    requireRight(user, 'attendance');
+    if (!REPORT_ROLES.includes(user.role)) throw new HttpError(403, 'Zapise vpisuje nočni varnostnik');
+    if (!isDate(b.night) || (isoDow(b.night) > 4 && isoDow(b.night) !== 7)) throw new HttpError(400, 'Neveljaven dan');
+    if (b.night > ck.today) throw new HttpError(400, 'Zapis lahko vpišete šele na ta večer');
+    if (b.night < addDays(ck.today, -REPORT_DAYS_BACK)) throw new HttpError(400, `Zapis lahko vpišete največ ${REPORT_DAYS_BACK} dni nazaj`);
+    const arrived = String(b.arrived_at || '').trim();
+    if (arrived && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(arrived)) throw new HttpError(400, 'Vpišite uro prihoda, npr. 23:30');
+    const note = String(b.note || '').trim().slice(0, 500);
+    const id = Number(b.student_id);
+    const db = getPool();
+    if (!arrived && !note) {
+      await db.query('delete from guard_reports where student_id = $1 and night = $2', [id, b.night]);
+      return { ok: true };
+    }
+    const { rows } = await db.query('select left_on from students where id = $1', [id]);
+    if (!rows[0]) throw new HttpError(400, 'Dijaka ni mogoče najti');
+    await db.query(`insert into guard_reports (student_id, night, arrived_at, note, created_by) values ($1, $2, $3, $4, $5)
+      on conflict (student_id, night) do update set arrived_at = $3, note = $4, created_by = $5, created_at = now()`,
+      [id, b.night, arrived, note, user.id]);
+    let ticked = false;
+    if (arrived && !(rows[0].left_on && rows[0].left_on <= b.night)) {
+      const night = (await nightsOfWeek(ck, addDays(b.night, -(isoDow(b.night) % 7)))).find(n => n.day === b.night);
+      const slot = night.arrival ? 'guard' : 'night';
+      if (night.inHome && SLOT_ROLES[slot].includes(user.role)) {
+        const r = await db.query(`insert into attendance (student_id, night, slot, checked_by) values ($1, $2, $3, $4)
+          on conflict do nothing`, [id, b.night, slot, user.id]);
+        ticked = r.rowCount > 0;
+      }
+    }
+    return { ok: true, ticked };
   },
 
   // A future absence is removed; one that has already begun ends yesterday

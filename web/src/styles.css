@@ -604,3 +604,26 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .att-meals-days { display: grid; gap: 10px; margin: 12px 0; }
 .att-meals-day { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; }
 .att-meals-day > div { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+/* Night guard's records */
+.att td.reported { box-shadow: inset -3px 0 0 #b8860b; }
+.att td.noted.reported { box-shadow: inset 3px 0 0 #7a5cc0, inset -3px 0 0 #b8860b; }
+.att .guard-tag { display: flex; align-items: center; justify-content: center; gap: 3px; max-width: 150px; margin: 2px auto 0; border: 0; background: #fdf3d6; color: #7a5800; border-radius: 4px; padding: 1px 5px; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.att .guard-tag:disabled { cursor: default; }
+.att .guard-tag em { font-style: normal; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-arrived { display: inline-flex; align-items: center; gap: 3px; margin-top: 2px; border: 1px solid #c9a227; background: #fffaf0; color: #7a5800; border-radius: 4px; padding: 1px 6px; font-size: 11px; cursor: pointer; }
+.att-legend .lg-icon.guard { color: #b8860b; }
+.guard-reports { margin: 0 24px 12px; border: 1px solid #e8d48f; background: #fffbea; border-radius: 8px; padding: 6px 12px; }
+.guard-reports-head { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; padding: 4px 0; cursor: pointer; color: #7a5800; text-align: left; }
+.guard-reports-head svg:last-child { margin-left: auto; transition: transform 0.15s; }
+.guard-reports-head .rot { transform: rotate(90deg); }
+.guard-reports-night h4 { margin: 8px 0 4px; font-size: 13px; }
+.guard-reports-night ul { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 4px; }
+.guard-reports-night li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; }
+.guard-reports-night .arr { display: inline-flex; align-items: center; gap: 3px; color: #7a5800; font-weight: 600; }
+.guard-reports-night .txt { flex: 1 1 200px; }
+.guard-reports-night li .btn { margin-left: auto; }
+.guard-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.guard-chip { border: 1px solid var(--rule); background: #fff; border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.guard-chip:hover { border-color: #c9a227; background: #fffaf0; }
+.guard-planned { display: flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; background: #f1ecfa; color: #5b3fa3; border-radius: 6px; font-size: 13px; }
+.att-away-form textarea { width: 100%; resize: vertical; }
