@@ -268,6 +268,22 @@ function cleanStudent(b) {
   return s;
 }
 
+// Free-form record fields { key: text } — contacts, addresses, enrolment data imported from the register
+function cleanDetails(d) {
+  const out = {};
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return out;
+  for (const [k, v] of Object.entries(d).slice(0, 120)) {
+    const key = String(k).trim().slice(0, 80);
+    const val = String(v ?? '').trim().slice(0, 500);
+    if (key && val) out[key] = val;
+  }
+  return out;
+}
+const sameJson = (a, b) => {
+  const norm = o => JSON.stringify(Object.keys(o || {}).sort().map(k => [k, o[k]]));
+  return norm(a) === norm(b);
+};
+
 // Fill unlocked, already-planned days for a (re)activated or new student
 async function fillStudent(ck, studentId) {
   const through = ck.settings.materialized_through;
@@ -290,19 +306,23 @@ async function saveStudent(ck, input, userId) {
   await horizon(ck);
   if (!b.id) {
     const { rows } = await db.query(`
-      insert into students (first_name, last_name, group_name, room, diet, diet_reason, notes, def_b, def_l, def_d, weekly, active, ext_id)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`,
-      [s.first_name, s.last_name, s.group_name, s.room, s.diet, s.diet_reason, s.notes, s.def_b, s.def_l, s.def_d, JSON.stringify(s.weekly), s.active, s.ext_id]);
+      insert into students (first_name, last_name, group_name, room, diet, diet_reason, notes, def_b, def_l, def_d, weekly, active, ext_id, details)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *`,
+      [s.first_name, s.last_name, s.group_name, s.room, s.diet, s.diet_reason, s.notes, s.def_b, s.def_l, s.def_d, JSON.stringify(s.weekly), s.active, s.ext_id,
+        JSON.stringify(cleanDetails(b.details))]);
     await fillStudent(ck, rows[0].id);
     return rows[0];
   }
   const { rows: before } = await db.query('select * from students where id = $1', [b.id]);
   if (!before[0]) throw new HttpError(400, 'Dijaka ni mogoče najti');
   const old = before[0];
+  // The student list doesn't carry details; a save without them keeps what is stored
+  const details = b.details && typeof b.details === 'object' ? cleanDetails(b.details) : old.details;
   const { rows } = await db.query(`
     update students set first_name=$2, last_name=$3, group_name=$4, room=$5, diet=$6, diet_reason=$7, notes=$8,
-      def_b=$9, def_l=$10, def_d=$11, weekly=$12, active=$13, ext_id=$14 where id=$1 returning *`,
-    [b.id, s.first_name, s.last_name, s.group_name, s.room, s.diet, s.diet_reason, s.notes, s.def_b, s.def_l, s.def_d, JSON.stringify(s.weekly), s.active, s.ext_id]);
+      def_b=$9, def_l=$10, def_d=$11, weekly=$12, active=$13, ext_id=$14, details=$15 where id=$1 returning *`,
+    [b.id, s.first_name, s.last_name, s.group_name, s.room, s.diet, s.diet_reason, s.notes, s.def_b, s.def_l, s.def_d, JSON.stringify(s.weekly), s.active, s.ext_id,
+      JSON.stringify(details)]);
 
   if (old.active && !s.active) {
     // Moved out / on leave: drop all orders that can still be changed
@@ -630,12 +650,21 @@ const actions = {
     return { students: rows.map(r => pick(r, keys)), full: can(user, 'students') };
   },
 
+  // Contacts and enrolment data of one student, loaded when the record is opened
+  async studentDetails(b, user) {
+    requireRight(user, 'students');
+    const { rows } = await getPool().query('select details from students where id = $1', [b.id]);
+    if (!rows[0]) throw new HttpError(400, 'Dijaka ni mogoče najti');
+    return { details: rows[0].details || {} };
+  },
+
   async saveStudent(b, user, ck) {
     requireRight(user, 'diets');
     const input = b.student || {};
     if (!can(user, 'students')) {
       if (!input.id) throw new HttpError(403, 'Dijake dodajajo vzgojitelji');
       input.dietOnly = true;
+      delete input.details;
     }
     const saved = await saveStudent(ck, input, user.id);
     await audit(user, input.id ? 'student.update' : 'student.create', `${saved.first_name} ${saved.last_name}${input.dietOnly ? ' (prehrana)' : ''}`);
@@ -658,19 +687,22 @@ const actions = {
     for (const raw of b.rows) {
       const r = {};
       for (const k of ['ext_id', 'first_name', 'last_name', 'group_name', 'room', 'diet']) r[k] = String(raw[k] ?? '').trim();
+      const details = cleanDetails(raw.details);
       if (!r.first_name || !r.last_name) { plan.skipped++; continue; }
       const old = (r.ext_id && byExt.get(r.ext_id)) || byName.get(key(r.first_name, r.last_name));
       if (old && seen.has(old.id)) { plan.skipped++; continue; }
       if (!old) {
         if (raw.left) plan.skipped++;
-        else plan.create.push(r);
+        else plan.create.push({ ...r, details });
         continue;
       }
       seen.add(old.id);
       const next = { ...old };
       for (const [k, v] of Object.entries(r)) if (v) next[k] = v;
+      next.details = { ...(old.details || {}), ...details };
       if (raw.left && old.active) next.active = false;
-      const changed = ['ext_id', 'first_name', 'last_name', 'group_name', 'room', 'diet', 'active'].some(k => next[k] !== old[k]);
+      const changed = ['ext_id', 'first_name', 'last_name', 'group_name', 'room', 'diet', 'active'].some(k => next[k] !== old[k])
+        || !sameJson(next.details, old.details);
       if (!changed) plan.same++;
       else (next.active ? plan.update : plan.moveOut).push(next);
     }

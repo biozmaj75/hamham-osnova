@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2 } from 'lucide-react';
 import { api } from './api.js';
 import { readXlsx, excelDate } from './xlsx.js';
+import { DETAIL_FIELDS, detailColumns, rowDetails } from './details.js';
 import Modal from './Modal.jsx';
 import { loginSlipsPdf, downloadBlob } from './pdf.js';
 import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, WEEKDAYS, DEF_COL, ROLE_NAME, fmtDay, studentName, plural } from './meals.js';
@@ -123,12 +124,22 @@ function ExceptionTag({ student }) {
 }
 
 function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged }) {
-  const [s, setS] = useState(student);
+  const [s, setS] = useState(student.id ? student : { ...student, details: {} });
+  const [tab, setTab] = useState('basic');
   const ro = !full; // the meal planner edits only the diet and menu fields
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState(null);
   const set = (k, v) => setS(prev => ({ ...prev, [k]: v }));
+  const setDetail = (k, v) => setS(prev => ({ ...prev, details: { ...prev.details, [k]: v } }));
+
+  // Contacts and register data are loaded only when a record is opened
+  useEffect(() => {
+    if (!full || !student.id) return;
+    api('studentDetails', { id: student.id })
+      .then(r => setS(prev => ({ ...prev, details: r.details })))
+      .catch(err => setError(err.message));
+  }, [student.id, full]);
   const setWeekly = (n, meal, v) => setS(prev => {
     const day = { ...(prev.weekly?.[n] || {}) };
     if (v) day[meal] = v; else delete day[meal];
@@ -153,7 +164,16 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
 
   return (
     <Modal title={student.id ? studentName(student) : 'Nov dijak'} onClose={onClose} wide>
+      {full && (
+        <div className="seg student-tabs">
+          {[['basic', 'Osnovno in prehrana'], ['contact', 'Kontakti'], ['other', 'Ostalo']].map(([k, label]) => (
+            <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>
+          ))}
+        </div>
+      )}
       <form className="form two-col" onSubmit={save}>
+        {tab !== 'basic' && <DetailsTab tab={tab} details={s.details} set={setDetail} />}
+        <div className={`tab-body${tab === 'basic' ? '' : ' hidden'}`}>
         <label>Ime<input value={s.first_name} onChange={e => set('first_name', e.target.value)} readOnly={ro} autoFocus={!ro} /></label>
         <label>Priimek<input value={s.last_name} onChange={e => set('last_name', e.target.value)} readOnly={ro} /></label>
         <label className={full ? '' : 'span2'}>Skupina
@@ -205,6 +225,7 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
           <label className="inline-check span2"><input type="checkbox" checked={s.active} onChange={e => set('active', e.target.checked)} /> Živi v domu (odkljukajte, ko se dijak izseli)</label>
         )}
         {student.id && <p className="hint span2">Sprememba privzetega menija ali izjem posodobi vse odprte dni do konca šolskega leta, ki niso bili ročno spremenjeni.</p>}
+        </div>
         {error && <p className="error span2">{error}</p>}
         <div className="form-actions span2">
           {student.id && (
@@ -217,9 +238,9 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
           <button className="btn primary" disabled={busy}>{busy ? 'Shranjevanje …' : 'Shrani'}</button>
         </div>
       </form>
-      {student.id && student.active && full && <LoginBox student={student} me={me} onChanged={onChanged} />}
-      {student.id && student.active && me.rights.includes('orders') && <AbsenceBox student={student} />}
-      {log && (
+      {tab === 'basic' && student.id && student.active && full && <LoginBox student={student} me={me} onChanged={onChanged} />}
+      {tab === 'basic' && student.id && student.active && me.rights.includes('orders') && <AbsenceBox student={student} />}
+      {tab === 'basic' && log && (
         <div className="log">
           <h4>Zadnje spremembe</h4>
           {log.length === 0 && <p className="muted">Še ni sprememb.</p>}
@@ -235,6 +256,43 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
         </div>
       )}
     </Modal>
+  );
+}
+
+const KNOWN_DETAILS = new Set(DETAIL_FIELDS.map(([k]) => k));
+
+// Contacts (student, mother, father) or everything else from the register, grouped in sections
+function DetailsTab({ tab, details, set }) {
+  if (!details) return <p className="muted span2">Nalaganje …</p>;
+  const fields = DETAIL_FIELDS.filter(f => f[2] === tab);
+  const sections = [...new Set(fields.map(f => f[3]))];
+  const unknown = tab === 'other' ? Object.keys(details).filter(k => !KNOWN_DETAILS.has(k)).sort((a, b) => a.localeCompare(b, 'sl')) : [];
+  const link = (type, v) => {
+    if (!v) return null;
+    if (type === 'email') return <a href={`mailto:${v}`}>piši</a>;
+    if (type === 'phone') return <a href={`tel:${v.replace(/[^\d+]/g, '')}`}>pokliči</a>;
+    return null;
+  };
+  return (
+    <>
+      {sections.map(sec => (
+        <fieldset key={sec} className="span2 details-field">
+          <legend>{sec}</legend>
+          {fields.filter(f => f[3] === sec).map(([k, label, , , , type]) => (
+            <label key={k}><span>{label} {link(type, details[k])}</span>
+              <input value={details[k] || ''} type={type === 'email' ? 'email' : 'text'} onChange={e => set(k, e.target.value)} />
+            </label>
+          ))}
+        </fieldset>
+      ))}
+      {unknown.length > 0 && (
+        <fieldset className="span2 details-field">
+          <legend>Drugi stolpci iz uvoza</legend>
+          {unknown.map(k => <label key={k}>{k}<input value={details[k] || ''} onChange={e => set(k, e.target.value)} /></label>)}
+        </fieldset>
+      )}
+      {tab === 'contact' && <p className="hint span2">Kontaktne podatke vidijo samo vzgojitelji, ravnatelj in skrbnik – kuhinja in organizator prehrane ne.</p>}
+    </>
   );
 }
 
@@ -299,6 +357,7 @@ function ImportDialog({ me, onClose, onDone }) {
     if (mode === 'paste') return parsePaste(text);
     if (!sheet) return [];
     const cell = (r, k) => (sheet.cols[k] === '' ? '' : r[sheet.cols[k]] ?? '');
+    const extra = detailColumns(sheet.rows[sheet.headerRow], Object.values(sheet.cols).filter(c => c !== ''));
     return sheet.rows.slice(sheet.headerRow + 1)
       .filter(r => r && r.some(v => String(v).trim()))
       .map(r => {
@@ -306,6 +365,7 @@ function ImportDialog({ me, onClose, onDone }) {
         for (const [k] of IMPORT_FIELDS) if (k !== 'left') out[k] = String(cell(r, k)).trim();
         const left = excelDate(cell(r, 'left'));
         if (left && left <= today) out.left = true;
+        out.details = rowDetails(r, extra);
         return out;
       });
   }, [mode, text, sheet, today]);
@@ -348,9 +408,8 @@ function ImportDialog({ me, onClose, onDone }) {
 
         {mode === 'file' ? (
           <>
-            <p className="hint">Izberite preglednico dijakov (.xlsx). Prebere se samo prvi list in samo stolpci za prehrano:
-              priimek, ime, vzgojna skupina, dieta, izstop in zap. št. dijaka. <b>Ostali podatki (EMŠO, naslovi, starši, šola …) se ne prenesejo</b> –
-              datoteka se obdela kar v vašem brskalniku.</p>
+            <p className="hint">Izberite preglednico dijakov (.xlsx). Prebere se prvi list. Poleg osnovnih podatkov se prenesejo tudi kontakti
+              (naslovi, telefoni, e-naslovi dijaka in staršev) in vsi ostali stolpci; vidijo jih le vzgojitelji, ravnatelj in skrbnik.</p>
             <label className="file-pick">
               <Upload size={16} /> {sheet ? sheet.name : 'Izberi datoteko .xlsx'}
               <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={pick} />
@@ -368,6 +427,7 @@ function ImportDialog({ me, onClose, onDone }) {
                 ))}
               </fieldset>
             )}
+            {sheet && <p className="muted">Dodatnih stolpcev (kontakti in ostalo): {detailColumns(headers, Object.values(sheet.cols).filter(c => c !== '')).length}</p>}
           </>
         ) : (
           <>
@@ -395,7 +455,7 @@ function ImportDialog({ me, onClose, onDone }) {
         {sm && (
           <ul className="import-summary">
             <li><b>{sm.create}</b> novih dijakov</li>
-            <li><b>{sm.update}</b> posodobljenih (skupina, dieta, ime)</li>
+            <li><b>{sm.update}</b> posodobljenih (osnovni podatki, kontakti, ostalo)</li>
             {sm.moveOut > 0 && <li><b>{sm.moveOut}</b> izseljenih po datumu izstopa: {preview.moveOutNames.slice(0, 8).join(', ')}{sm.moveOut > 8 ? ' …' : ''}</li>}
             <li><b>{sm.same}</b> brez sprememb{sm.skipped > 0 && <>, <b>{sm.skipped}</b> preskočenih (izstopili ali podvojeni)</>}</li>
           </ul>

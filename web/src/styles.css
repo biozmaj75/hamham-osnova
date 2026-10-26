@@ -504,3 +504,11 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .pick-list .tag { margin-left: 4px; }
 @media (max-width: 700px) { .weekly-bulk-row { grid-template-columns: 1fr; } }
 .student-cancel { margin-top: 10px; }
+
+/* Student record tabs */
+.student-tabs { margin-bottom: 14px; }
+.form.two-col > .tab-body { display: contents; }
+.form.two-col > .tab-body.hidden { display: none; }
+.details-field { border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 14px 14px; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 14px; }
+.details-field legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
+.details-field label > span a { font-weight: 400; font-size: 12px; margin-left: 6px; }
