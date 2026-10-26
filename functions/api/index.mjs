@@ -43,6 +43,8 @@ const SLOT_ROLES = {
   guard: ['admin', 'principal', 'guard'],
   teacher: ['admin', 'principal', 'teacher'],
 };
+// Who may announce that a student will be away in the evenings
+const AWAY_ROLES = ['admin', 'principal', 'teacher'];
 // Rights that can be granted to a single staff account on top of its role
 const EXTRA_RIGHTS = ['orders', 'menu', 'mealSettings', 'report'];
 const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office', 'guard'];
@@ -973,12 +975,18 @@ const actions = {
       select a.student_id, a.night, a.slot, a.checked_at, coalesce(u.name, '') as by_name
       from attendance a left join users u on u.id = a.checked_by
       where a.night between $1 and $2`, [b.sunday, last]);
-    // Not registered for next morning's breakfast: probably not sleeping in the home
+    // Students with at least one meal ordered the next day: if they are not in the home that evening,
+    // the teacher should check whether the meals are right
+    await materialize(ck, addDays(last, 1));
+    const { rows: fed } = await db.query(`
+      select distinct student_id, (day - 1)::date as night from orders
+      where variant <> 'none' and day between $1::date + 1 and $2::date + 1`, [b.sunday, last]);
     const { rows: away } = await db.query(`
-      select student_id, (day - 1)::date as night from orders
-      where meal = 'B' and variant = 'none' and day between $1::date + 1 and $2::date + 1`, [b.sunday, last]);
+      select a.id, a.student_id, a.day_from, a.day_to, a.reason, a.created_at, coalesce(u.name, '') as by_name
+      from attendance_absences a left join users u on u.id = a.created_by
+      where a.day_to >= $1 and a.day_from <= $2 order by a.day_from`, [b.sunday, last]);
     const slots = Object.keys(SLOT_ROLES).filter(k => SLOT_ROLES[k].includes(user.role));
-    return { nights, students, marks, away, slots, today: ck.today };
+    return { nights, students, marks, fed, away, slots, canAway: AWAY_ROLES.includes(user.role), today: ck.today };
   },
 
   // { student_id, night, slot, present }
@@ -1006,6 +1014,41 @@ const actions = {
     } else {
       await db.query('delete from attendance where student_id = $1 and night = $2 and slot = $3', [id, b.night, slot]);
     }
+    return { ok: true };
+  },
+
+  // { student_ids, from, to, reason } — evenings the students will not be in the home
+  async addAttendanceAbsence(b, user, ck) {
+    requireRight(user, 'attendance');
+    if (!AWAY_ROLES.includes(user.role)) throw new HttpError(403, 'Odsotnosti vpisujejo vzgojitelji');
+    if (!isDate(b.from) || !isDate(b.to) || b.to < b.from) throw new HttpError(400, 'Vpišite obdobje odsotnosti');
+    if (b.from < ck.today) throw new HttpError(400, 'Odsotnost lahko vpišete od danes naprej');
+    if (b.to > addDays(b.from, 366)) throw new HttpError(400, 'Obdobje je predolgo');
+    const reason = String(b.reason || '').trim().slice(0, 200);
+    if (!reason) throw new HttpError(400, 'Vpišite razlog odsotnosti');
+    const ids = (b.student_ids || [b.student_id]).map(Number).filter(Boolean);
+    if (!ids.length || ids.length > 300) throw new HttpError(400, 'Izberite dijake');
+    const { rows } = await getPool().query(`
+      insert into attendance_absences (student_id, day_from, day_to, reason, created_by)
+      select id, $2, $3, $4, $5 from students where id = any($1::int[])
+      returning (select concat(first_name, ' ', last_name) from students where id = student_id) as name`,
+      [ids, b.from, b.to, reason, user.id]);
+    await audit(user, 'attendance.absence', `${rows.map(r => r.name).join(', ')}, ${b.from} – ${b.to}: ${reason}`);
+    return { added: rows.length };
+  },
+
+  // A future absence is removed; one that has already begun ends yesterday
+  async cancelAttendanceAbsence(b, user, ck) {
+    requireRight(user, 'attendance');
+    if (!AWAY_ROLES.includes(user.role)) throw new HttpError(403, 'Odsotnosti vpisujejo vzgojitelji');
+    const db = getPool();
+    const { rows } = await db.query('select a.*, s.first_name, s.last_name from attendance_absences a join students s on s.id = a.student_id where a.id = $1', [b.id]);
+    const a = rows[0];
+    if (!a) throw new HttpError(400, 'Odsotnosti ni mogoče najti');
+    if (a.day_to < ck.today) throw new HttpError(400, 'Pretekle odsotnosti ni mogoče preklicati');
+    if (a.day_from >= ck.today) await db.query('delete from attendance_absences where id = $1', [a.id]);
+    else await db.query('update attendance_absences set day_to = $2 where id = $1', [a.id, addDays(ck.today, -1)]);
+    await audit(user, 'attendance.absenceCancel', `${a.first_name} ${a.last_name}, ${a.day_from} – ${a.day_to}: ${a.reason}`);
     return { ok: true };
   },
 

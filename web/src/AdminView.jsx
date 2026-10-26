@@ -47,6 +47,8 @@ const ACTION_LABEL = {
   'student.password': 'Dostop za dijaka',
   'absence.add': 'Odsotnost',
   'absence.cancel': 'Preklic odsotnosti',
+  'attendance.absence': 'Odsotnost zvečer',
+  'attendance.absenceCancel': 'Preklic odsotnosti zvečer',
   'menu.copy': 'Kopiranje jedilnika',
   'settings.meals': 'Nastavitve prehrane',
   'settings.system': 'Sistemske nastavitve',

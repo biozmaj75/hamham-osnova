@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Plus } from 'lucide-react';
 import { api } from './api.js';
 import { addDays, dow, dayShort, fmtDay, studentName } from './meals.js';
+import Modal from './Modal.jsx';
 
 const SLOT_NAME = { guard: 'Nočni varnostnik', teacher: 'Dežurni vzgojitelj', night: 'Prisoten' };
 const sundayOf = day => addDays(day, -dow(day));
 const fmtTime = t => new Date(t).toLocaleString('sl-SI', { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 const key = (sid, night, slot) => `${sid}|${night}|${slot}`;
+const REASONS = ['bolezen', 'praksa', 'izmenjava', 'večdnevni izlet', 'ekskurzija', 'tekmovanje', 'osebni razlogi'];
+const span = a => (a.day_from === a.day_to ? fmtDay(a.day_from) : `${fmtDay(a.day_from)} – ${fmtDay(a.day_to)}`);
 
 // Evening attendance Sunday–Thursday. On an arrival evening (Sunday or the evening of a holiday) students
 // report to the night guard and to the teacher on duty, so that evening has a column for each of them.
@@ -18,6 +21,7 @@ export default function AttendanceView({ me }) {
   const [group, setGroup] = useState(() => (myGroups.length ? '@mine' : ''));
   const [query, setQuery] = useState('');
   const [marks, setMarks] = useState(new Map());
+  const [awayFor, setAwayFor] = useState(null);
 
   const load = useCallback(async (week, quiet) => {
     if (!quiet) setData(null);
@@ -51,7 +55,14 @@ export default function AttendanceView({ me }) {
     return (data?.students || []).filter(s => (!only || only.includes(s.group_name))
       && (!q || `${s.first_name} ${s.last_name} ${s.room || ''}`.toLowerCase().includes(q)));
   }, [data, group, query, myGroups]);
-  const away = useMemo(() => new Set((data?.away || []).map(a => `${a.student_id}|${a.night}`)), [data]);
+  const fed = useMemo(() => new Set((data?.fed || []).map(f => `${f.student_id}|${f.night}`)), [data]);
+  const absenceOn = (sid, night) => (data?.away || []).find(a => a.student_id === sid && night >= a.day_from && night <= a.day_to);
+  const present = (sid, night) => ['night', 'guard', 'teacher'].some(slot => marks.has(key(sid, night, slot)));
+  // The roll call of an evening has started once anybody is ticked; earlier evenings count as finished
+  const started = useMemo(() => new Set([...marks.keys()].map(k => k.split('|')[1])), [marks]);
+  // Not in the home that evening but meals are ordered for the next day: the teacher should check the meals
+  const warn = (s, night) => fed.has(`${s.id}|${night}`) && !present(s.id, night)
+    && (absenceOn(s.id, night) || night < data.today || (night === data.today && started.has(night)));
 
   const livesThere = (s, night) => !s.left_on || s.left_on > night;
   const canTick = (s, c) => c.slot && data.slots.includes(c.slot) && c.night.day <= data.today && livesThere(s, c.night.day);
@@ -124,22 +135,38 @@ export default function AttendanceView({ me }) {
                 return [
                   head && <tr key={`g-${s.group_name}`} className="group-row"><th className="sticky" colSpan={1}>{s.group_name || '(brez skupine)'}</th><td colSpan={cols.length} /></tr>,
                   <tr key={s.id}>
-                    <th className="sticky">{studentName(s)}{s.room && <small>soba {s.room}</small>}</th>
+                    <th className="sticky">
+                      {data.canAway
+                        ? <button className="att-name" onClick={() => setAwayFor(s)} title="Vpiši ali preglej odsotnost">{studentName(s)}</button>
+                        : studentName(s)}
+                      {s.room && <small>soba {s.room}</small>}
+                    </th>
                     {cols.map(c => {
                       if (!c.slot) return <td key={c.night.day} className="off" />;
                       if (!livesThere(s, c.night.day)) return <td key={c.night.day + c.slot} className="off" title="Izseljen" />;
                       const m = marks.get(key(s.id, c.night.day, c.slot));
-                      const isAway = away.has(`${s.id}|${c.night.day}`);
+                      const absent = absenceOn(s.id, c.night.day);
+                      const alarm = warn(s, c.night.day);
+                      const future = c.night.day > data.today;
                       const editable = canTick(s, c);
-                      const title = m ? `${SLOT_NAME[c.slot]}: označil ${m.by_name || '—'}, ${fmtTime(m.checked_at)}`
-                        : !editable && c.night.day > data.today ? 'Prisotnost se označi na ta večer'
-                          : !data.slots.includes(c.slot) ? `Ta stolpec odkljuka ${c.slot === 'guard' ? 'nočni varnostnik' : 'dežurni vzgojitelj'}` : '';
+                      const title = [
+                        m ? `${SLOT_NAME[c.slot]}: označil ${m.by_name || '—'}, ${fmtTime(m.checked_at)}` : '',
+                        absent ? `Odsoten ${span(absent)}: ${absent.reason}` : '',
+                        alarm ? 'Dijaka ni v domu, naslednji dan pa ima naročene obroke – preverite prehrano' : '',
+                        !m && !future && !data.slots.includes(c.slot) ? `Ta stolpec odkljuka ${c.slot === 'guard' ? 'nočni varnostnik' : 'dežurni vzgojitelj'}` : '',
+                      ].filter(Boolean).join('\n');
                       return (
-                        <td key={c.night.day + c.slot} className={`${c.night.day === today ? 'today' : ''}${m ? ' on' : ''}`} title={title}>
-                          <label className="tick">
-                            <input type="checkbox" checked={!!m} disabled={!editable} onChange={() => toggle(s, c)} aria-label={`${studentName(s)} ${dayShort(c.night.day)} ${SLOT_NAME[c.slot]}`} />
-                          </label>
-                          {isAway && !m && <span className="away" title="Ni prijavljen na zajtrk naslednji dan">odjavljen</span>}
+                        <td key={c.night.day + c.slot} title={title}
+                          className={`${c.night.day === today ? 'today' : ''}${m ? ' on' : ''}${absent ? ' absent' : ''}${alarm ? ' warn' : ''}`}>
+                          {!future && (
+                            <label className="tick">
+                              <input type="checkbox" checked={!!m} disabled={!editable} onChange={() => toggle(s, c)} aria-label={`${studentName(s)} ${dayShort(c.night.day)} ${SLOT_NAME[c.slot]}`} />
+                            </label>
+                          )}
+                          {absent && <span className="away">{absent.reason}</span>}
+                          {future && !absent && data.canAway && (
+                            <button className="att-plan" onClick={() => setAwayFor({ ...s, from: c.night.day })} title="Vpiši odsotnost" aria-label={`Odsotnost ${studentName(s)} ${dayShort(c.night.day)}`}><Plus size={13} /></button>
+                          )}
                         </td>
                       );
                     })}
@@ -162,8 +189,68 @@ export default function AttendanceView({ me }) {
           </table>
         </div>
       )}
+      <div className="att-legend">
+        <span><i className="sw on" />prisoten</span>
+        <span><i className="sw absent" />napovedana odsotnost</span>
+        <span><i className="sw warn" />ni v domu, naslednji dan pa ima naročene obroke – preverite prehrano</span>
+      </div>
       <p className="hint att-hint">Kljukico postavite, ko se dijak zvečer javi v domu. Ob nedeljah oziroma ob prihodu po prazniku dijaka odkljukata nočni varnostnik in dežurni vzgojitelj, vsak v svojem stolpcu.
-        »Odjavljen« pomeni, da dijak naslednje jutro nima prijavljenega zajtrka. Podatki se osvežijo vsako minuto.</p>
+        {data?.canAway && ' Odsotnost za naprej (bolezen, praksa, izmenjava, izlet …) vpišete s klikom na ime dijaka ali na + pri prihodnjem večeru. Vpis odsotnosti ne spreminja prehrane.'} Podatki se osvežijo vsako minuto.</p>
+      {awayFor && (
+        <AwayDialog student={awayFor} from={awayFor.from} today={data.today} absences={data.away.filter(a => a.student_id === awayFor.id)}
+          onClose={() => setAwayFor(null)} onSaved={() => load(sunday, true)} />
+      )}
     </div>
+  );
+}
+
+function AwayDialog({ student, from: start, today, absences, onClose, onSaved }) {
+  const [from, setFrom] = useState(start || today);
+  const [to, setTo] = useState(start || today);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function run(fn) {
+    setBusy(true);
+    setError('');
+    try {
+      await fn();
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    }
+    setBusy(false);
+  }
+  const save = () => run(() => api('addAttendanceAbsence', { student_ids: [student.id], from, to, reason }));
+
+  return (
+    <Modal title={`Odsotnost – ${studentName(student)}`} onClose={onClose}>
+      {absences.length > 0 && (
+        <ul className="att-absences">
+          {absences.map(a => (
+            <li key={a.id}>
+              <span><b>{span(a)}</b> · {a.reason}<small className="muted"> vpisal {a.by_name || '—'}</small></span>
+              {a.day_to >= today && <button className="btn small ghost" disabled={busy} onClick={() => run(() => api('cancelAttendanceAbsence', { id: a.id }))}>{a.day_from < today ? 'Končaj' : 'Prekliči'}</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="att-away-form" onSubmit={e => { e.preventDefault(); save(); }}>
+        <label>Prvi večer odsotnosti<input type="date" value={from} min={today} onChange={e => { setFrom(e.target.value); if (to < e.target.value) setTo(e.target.value); }} /></label>
+        <label>Zadnji večer odsotnosti<input type="date" value={to} min={from} onChange={e => setTo(e.target.value)} /></label>
+        <label className="span2">Razlog
+          <input list="att-reasons" value={reason} onChange={e => setReason(e.target.value)} placeholder="npr. bolezen, praksa, izmenjava" autoFocus />
+          <datalist id="att-reasons">{REASONS.map(r => <option key={r} value={r} />)}</datalist>
+        </label>
+        <p className="hint span2">Vpis velja samo za večerno prisotnost. Če dijak v tem času ne bo jedel v domu, ga odjavite še v Naročilih.</p>
+        {error && <p className="error span2">{error}</p>}
+        <div className="box-actions span2">
+          <button className="btn primary" disabled={busy || !from || !to || to < from || !reason.trim()}>{busy ? 'Shranjevanje …' : 'Vpiši odsotnost'}</button>
+          <button type="button" className="btn ghost" onClick={onClose}>Zapri</button>
+        </div>
+      </form>
+    </Modal>
   );
 }

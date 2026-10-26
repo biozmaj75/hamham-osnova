@@ -133,6 +133,18 @@ create table if not exists attendance (
 );
 create index if not exists attendance_night_idx on attendance(night);
 
+-- Evenings a student is known to be away (ill, work placement, exchange, trip); kept apart from meal absences
+create table if not exists attendance_absences (
+  id serial primary key,
+  student_id int not null references students(id) on delete cascade,
+  day_from date not null,
+  day_to date not null,
+  reason text not null default '',
+  created_by int references users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists attendance_absences_idx on attendance_absences(day_to, day_from);
+
 -- Absences: every meal in the range is deregistered; cancelling restores the default menu
 create table if not exists absences (
   id serial primary key,
