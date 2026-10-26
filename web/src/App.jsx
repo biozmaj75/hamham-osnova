@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, ChefHat, Users, Settings, LogOut, KeyRound, UtensilsCrossed, ShieldCheck, Soup, FileSpreadsheet } from 'lucide-react';
+import { CalendarDays, ChefHat, Users, Settings, LogOut, KeyRound, UtensilsCrossed, ShieldCheck, Soup, FileSpreadsheet, MoonStar } from 'lucide-react';
 import { api, session } from './api.js';
 import Login from './Login.jsx';
 import OrdersView from './OrdersView.jsx';
@@ -9,6 +9,7 @@ import { UsersView, SettingsView } from './AdminView.jsx';
 import MenuView from './MenuView.jsx';
 import ReportView from './ReportView.jsx';
 import MyMealsView from './MyMealsView.jsx';
+import AttendanceView from './AttendanceView.jsx';
 import PasswordDialog from './PasswordDialog.jsx';
 import { ROLE_NAME } from './meals.js';
 
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'menu', label: 'Jedilnik', icon: UtensilsCrossed, show: me => me.user.role === 'student' || me.rights.includes('viewMenu') },
   { id: 'kitchen', label: 'Kuhinja', icon: ChefHat, right: 'kitchen' },
   { id: 'report', label: 'Mesečni pregled', icon: FileSpreadsheet, right: 'report' },
+  { id: 'attendance', label: 'Prisotnost', icon: MoonStar, right: 'attendance' },
   { id: 'students', label: 'Dijaki', icon: Users, right: 'diets' },
   { id: 'users', label: 'Uporabniki', icon: ShieldCheck, right: 'users' },
   { id: 'settings', label: 'Nastavitve', icon: Settings, show: me => me.rights.includes('mealSettings') || me.rights.includes('system') },
@@ -77,6 +79,7 @@ export default function App() {
         {active?.id === 'menu' && <MenuView clock={me.clock} canEdit={has('menu')} />}
         {active?.id === 'kitchen' && <KitchenView clock={me.clock} />}
         {active?.id === 'report' && <ReportView me={me} />}
+        {active?.id === 'attendance' && <AttendanceView me={me} />}
         {active?.id === 'students' && <StudentsView me={me} />}
         {active?.id === 'users' && <UsersView me={me} />}
         {active?.id === 'settings' && <SettingsView me={me} />}

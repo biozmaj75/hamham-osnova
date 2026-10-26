@@ -118,7 +118,20 @@ alter table users add column if not exists groups text[] not null default '{}';
 
 alter table users drop constraint if exists users_role_check;
 alter table users add constraint users_role_check
-  check (role in ('admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office', 'student'));
+  check (role in ('admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office', 'guard', 'student'));
+
+-- Who was in the home for the night: a row = ticked. night = the evening of that day.
+-- slot: 'night' on an ordinary evening; on an arrival evening (Sunday or after a holiday) the night guard
+-- ('guard') and the teacher on duty ('teacher') each tick the student separately.
+create table if not exists attendance (
+  student_id int not null references students(id) on delete cascade,
+  night date not null,
+  slot text not null check (slot in ('night', 'guard', 'teacher')),
+  checked_by int references users(id) on delete set null,
+  checked_at timestamptz not null default now(),
+  primary key (student_id, night, slot)
+);
+create index if not exists attendance_night_idx on attendance(night);
 
 -- Absences: every meal in the range is deregistered; cancelling restores the default menu
 create table if not exists absences (

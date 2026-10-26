@@ -9,7 +9,7 @@ import { init, getPool, getSettings, setSetting } from './db.mjs';
 import crypto from 'node:crypto';
 import { hashPassword, verifyPassword, signToken, verifyToken } from './auth.mjs';
 import {
-  MEALS, VARIANTS, MENU_VARIANTS, DEF_COL, validVariant, defaultVariant, mealServed, addDays, isDate, localNow, firstEditableDay,
+  MEALS, VARIANTS, MENU_VARIANTS, DEF_COL, validVariant, defaultVariant, mealServed, addDays, isDate, isoDow, localNow, firstEditableDay,
 } from './rules.mjs';
 
 const CORS = {
@@ -35,10 +35,17 @@ const RIGHTS = {
   kitchen: ['admin', 'principal', 'teacher', 'dietitian', 'kitchen'],
   viewMenu: ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office'],
   report: ['admin', 'principal', 'dietitian', 'office'],       // monthly overview of all orders, Excel export
+  attendance: ['admin', 'principal', 'teacher', 'guard'],      // evening attendance sheet
+};
+// Who may tick which attendance column (see the attendance table)
+const SLOT_ROLES = {
+  night: ['admin', 'principal', 'teacher', 'guard'],
+  guard: ['admin', 'principal', 'guard'],
+  teacher: ['admin', 'principal', 'teacher'],
 };
 // Rights that can be granted to a single staff account on top of its role
 const EXTRA_RIGHTS = ['orders', 'menu', 'mealSettings', 'report'];
-const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office'];
+const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office', 'guard'];
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -157,6 +164,27 @@ async function writeOrders(rows, userId) {
 async function closedSet(from, to) {
   const { rows } = await getPool().query('select day, reason from closed_days where day between $1 and $2 order by day', [from, to]);
   return rows;
+}
+
+// Evenings Sunday–Thursday of the week starting on `sunday`. A student sleeps in the home on an evening
+// when the next day is a school day; an arrival evening is the first such evening after days at home
+// (Sunday, or the evening of a holiday).
+async function nightsOfWeek(ck, sunday) {
+  const closed = new Map((await closedSet(addDays(sunday, -1), addDays(sunday, 5))).map(c => [c.day, c.reason]));
+  const start = yearStart(ck);
+  const end = yearEnd(ck);
+  const schoolDay = d => isoDow(d) <= 5 && !closed.has(d) && (!start || d >= start) && (!end || d <= end);
+  const inHome = d => schoolDay(addDays(d, 1));
+  return [0, 1, 2, 3, 4].map(n => {
+    const day = addDays(sunday, n);
+    const next = addDays(day, 1);
+    return {
+      day,
+      inHome: inHome(day),
+      arrival: inHome(day) && !inHome(addDays(day, -1)),
+      reason: inHome(day) ? '' : closed.get(next) || (isoDow(next) > 5 ? '' : 'ni pouka'),
+    };
+  });
 }
 
 // Validates a batch of requested changes, resolves 'default', and writes what is allowed.
@@ -923,6 +951,62 @@ const actions = {
       select student_id, day, meal::text as meal, variant from orders
       where day between $1 and $2 and variant <> 'none' order by day`, [from, to]);
     return { from, to, students, orders, closed: await closedSet(from, to), clock: publicClock(ck) };
+  },
+
+  // ------------------------------------------------ attendance
+
+  // { sunday } -> the week's evenings, the students living in the home and who ticked whom
+  async attendanceWeek(b, user, ck) {
+    requireRight(user, 'attendance');
+    if (!isDate(b.sunday) || isoDow(b.sunday) !== 7) throw new HttpError(400, 'Neveljaven teden');
+    const nights = await nightsOfWeek(ck, b.sunday);
+    const last = addDays(b.sunday, 4);
+    const db = getPool();
+    // Everyone who lives in the home on at least one evening of the week (left_on = last day in the home,
+    // so the evening before it is the last night), plus anyone already ticked
+    const { rows: students } = await db.query(`
+      select id, first_name, last_name, group_name, room, left_on from students s
+      where (s.active and s.left_on is null) or s.left_on > $1::date
+         or exists (select 1 from attendance a where a.student_id = s.id and a.night between $1 and $2)
+      order by group_name, last_name, first_name`, [b.sunday, last]);
+    const { rows: marks } = await db.query(`
+      select a.student_id, a.night, a.slot, a.checked_at, coalesce(u.name, '') as by_name
+      from attendance a left join users u on u.id = a.checked_by
+      where a.night between $1 and $2`, [b.sunday, last]);
+    // Not registered for next morning's breakfast: probably not sleeping in the home
+    const { rows: away } = await db.query(`
+      select student_id, (day - 1)::date as night from orders
+      where meal = 'B' and variant = 'none' and day between $1::date + 1 and $2::date + 1`, [b.sunday, last]);
+    const slots = Object.keys(SLOT_ROLES).filter(k => SLOT_ROLES[k].includes(user.role));
+    return { nights, students, marks, away, slots, today: ck.today };
+  },
+
+  // { student_id, night, slot, present }
+  async setAttendance(b, user, ck) {
+    requireRight(user, 'attendance');
+    const slot = String(b.slot || '');
+    if (!SLOT_ROLES[slot]) throw new HttpError(400, 'Neveljaven stolpec');
+    if (!SLOT_ROLES[slot].includes(user.role)) {
+      throw new HttpError(403, slot === 'guard' ? 'Ta stolpec odkljuka nočni varnostnik' : 'Ta stolpec odkljuka dežurni vzgojitelj');
+    }
+    if (!isDate(b.night) || (isoDow(b.night) > 4 && isoDow(b.night) !== 7)) throw new HttpError(400, 'Neveljaven dan');
+    if (b.night > ck.today) throw new HttpError(400, 'Prisotnost lahko označite šele na ta dan');
+    const sunday = addDays(b.night, -(isoDow(b.night) % 7));
+    const night = (await nightsOfWeek(ck, sunday)).find(n => n.day === b.night);
+    if (!night.inHome) throw new HttpError(400, 'Ta večer dijaki niso v domu');
+    if ((slot === 'night') === night.arrival) throw new HttpError(400, 'Neveljaven stolpec za ta dan');
+    const db = getPool();
+    const id = Number(b.student_id);
+    if (b.present) {
+      const { rows } = await db.query('select left_on from students where id = $1', [id]);
+      if (!rows[0]) throw new HttpError(400, 'Dijaka ni mogoče najti');
+      if (rows[0].left_on && rows[0].left_on <= b.night) throw new HttpError(400, 'Dijak je takrat že izseljen');
+      await db.query(`insert into attendance (student_id, night, slot, checked_by) values ($1, $2, $3, $4)
+        on conflict (student_id, night, slot) do update set checked_by = $4, checked_at = now()`, [id, b.night, slot, user.id]);
+    } else {
+      await db.query('delete from attendance where student_id = $1 and night = $2 and slot = $3', [id, b.night, slot]);
+    }
+    return { ok: true };
   },
 
   // ------------------------------------------------ kitchen and menu
