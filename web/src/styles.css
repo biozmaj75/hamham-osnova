@@ -527,3 +527,19 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .move-out-fields label { display: grid; gap: 4px; font-size: 13px; }
 @media (max-width: 600px) { .move-out-fields { grid-template-columns: 1fr; } }
 .address-hit { display: block; color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+
+.month-nav { display: inline-flex; align-items: center; gap: 6px; }
+.month-nav strong { min-width: 120px; text-align: center; }
+.report .num { text-align: right; font-variant-numeric: tabular-nums; }
+.report tfoot th, .report tfoot td { border-top: 2px solid var(--rule); font-weight: 600; }
+.report-days-wrap { overflow: auto; max-height: calc(100vh - 210px); }
+.report-days { border-collapse: separate; border-spacing: 0; font-size: 12px; }
+.report-days th, .report-days td { padding: 4px 5px; border-bottom: 1px solid var(--rule); white-space: nowrap; text-align: center; }
+.report-days thead th { position: sticky; top: 0; background: var(--paper); z-index: 2; font-weight: 500; color: var(--ink-2); }
+.report-days .sticky { position: sticky; left: 0; background: var(--paper); z-index: 1; text-align: left; font-weight: 600; }
+.report-days thead .sticky { z-index: 3; }
+.report-days .sticky small { display: block; font-weight: 400; color: var(--ink-2); }
+.report-days .closed { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(0,0,0,0.04) 4px 8px); }
+.report-days .mini { display: inline-block; min-width: 16px; margin: 0 1px; padding: 1px 2px; border-radius: 3px; font-size: 10px; font-weight: 600; }
+.report-days .mini.off { color: #c9c0ae; }
+.report-days .day-total { font-size: 11px; color: var(--ink-2); }

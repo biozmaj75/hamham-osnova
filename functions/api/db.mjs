@@ -118,7 +118,7 @@ alter table users add column if not exists groups text[] not null default '{}';
 
 alter table users drop constraint if exists users_role_check;
 alter table users add constraint users_role_check
-  check (role in ('admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'student'));
+  check (role in ('admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office', 'student'));
 
 -- Absences: every meal in the range is deregistered; cancelling restores the default menu
 create table if not exists absences (

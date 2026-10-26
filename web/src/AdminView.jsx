@@ -4,7 +4,7 @@ import { api } from './api.js';
 import Modal from './Modal.jsx';
 import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, ROLE_NAME, fmtLong, capitalize } from './meals.js';
 
-const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen'];
+const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office'];
 
 // Mirror of the server's rights, for showing what each role can do
 const ROLE_RIGHTS = {
@@ -16,6 +16,7 @@ const ROLE_RIGHTS = {
   mealSettings: ['admin', 'dietitian'],
   system: ['admin'],
   kitchen: ['admin', 'principal', 'teacher', 'dietitian', 'kitchen'],
+  report: ['admin', 'principal', 'dietitian', 'office'],
 };
 
 const RIGHT_LABEL = {
@@ -27,6 +28,7 @@ const RIGHT_LABEL = {
   mealSettings: 'Šolsko leto, zaprti dnevi, izbire dijakov, ure obrokov',
   system: 'Rok za naročila, časovni pas',
   kitchen: 'Kuhinjski seznami in števila',
+  report: 'Mesečni pregled naročil in izvoz v Excel',
 };
 
 const ACTION_LABEL = {

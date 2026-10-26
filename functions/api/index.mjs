@@ -33,11 +33,12 @@ const RIGHTS = {
   mealSettings: ['admin', 'dietitian'],                        // school year, closed days, student choices, serving times
   system: ['admin'],                                           // order deadline, time zone
   kitchen: ['admin', 'principal', 'teacher', 'dietitian', 'kitchen'],
-  viewMenu: ['admin', 'principal', 'teacher', 'dietitian', 'kitchen'],
+  viewMenu: ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office'],
+  report: ['admin', 'principal', 'dietitian', 'office'],       // monthly overview of all orders, Excel export
 };
 // Rights that can be granted to a single staff account on top of its role
-const EXTRA_RIGHTS = ['orders', 'menu', 'mealSettings'];
-const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen'];
+const EXTRA_RIGHTS = ['orders', 'menu', 'mealSettings', 'report'];
+const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office'];
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -901,6 +902,27 @@ const actions = {
     if (rows[0].created_by !== user.id) throw new HttpError(403, 'To odsotnost je vpisal vzgojitelj; preklic uredi z njim');
     await cancelAbsence(ck, rows[0], user);
     return { ok: true };
+  },
+
+  // ------------------------------------------------ monthly report (office)
+
+  // { month: 'yyyy-mm' } -> every student who lived in the home that month (moved-out ones included) and their ordered meals
+  async monthReport(b, user, ck) {
+    requireRight(user, 'report');
+    if (!/^\d{4}-\d{2}$/.test(b.month || '')) throw new HttpError(400, 'Neveljaven mesec');
+    const from = `${b.month}-01`;
+    const to = addDays(addDays(from, 32).slice(0, 8) + '01', -1);
+    await horizon(ck);
+    const db = getPool();
+    const { rows: students } = await db.query(`
+      select id, first_name, last_name, group_name, ext_id, active, left_on from students s
+      where s.active or s.left_on >= $1::date
+         or exists (select 1 from orders o where o.student_id = s.id and o.day between $1 and $2 and o.variant <> 'none')
+      order by group_name, last_name, first_name`, [from, to]);
+    const { rows: orders } = await db.query(`
+      select student_id, day, meal::text as meal, variant from orders
+      where day between $1 and $2 and variant <> 'none' order by day`, [from, to]);
+    return { from, to, students, orders, closed: await closedSet(from, to), clock: publicClock(ck) };
   },
 
   // ------------------------------------------------ kitchen and menu
