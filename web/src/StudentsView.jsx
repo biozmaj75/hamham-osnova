@@ -196,7 +196,7 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
         </label>
         {full && <label>Soba<input value={s.room} onChange={e => set('room', e.target.value)} /></label>}
         <label><span>Posebna dieta <small>kuhinja jo vidi</small></span>
-          <input value={s.diet} onChange={e => set('diet', e.target.value)} placeholder="npr. brez glutena, brez laktoze" autoFocus={ro} />
+          <DietPicker value={s.diet} onChange={v => set('diet', v)} />
         </label>
         <label><span>Zdravstveni razlog <small>kuhinja ga ne vidi</small></span>
           <input value={s.diet_reason || ''} onChange={e => set('diet_reason', e.target.value)} placeholder="npr. celiakija (neobvezno)" />
@@ -326,6 +326,50 @@ function GroupSelect({ value, groups, onChange }) {
       {list.map(g => <option key={g} value={g}>{g}</option>)}
       <option value="@new">+ Nova skupina …</option>
     </select>
+  );
+}
+
+// Most common special diets; anything else can still be typed in
+const COMMON_DIETS = [
+  'brez glutena', 'brez laktoze', 'brez mleka', 'brez jajc', 'brez soje', 'brez rakov', 'brez rib',
+  'brez oreščkov', 'brez arašidov', 'brez sezama', 'brez jagod', 'brez svinjine',
+  'Crohnova bolezen', 'sladkorna bolezen',
+];
+const splitDiets = v => (v || '').split(',').map(x => x.trim()).filter(Boolean);
+
+// A student can have several diets at once; they are stored as one text, e.g. "brez glutena, brez jajc"
+function DietPicker({ value, onChange }) {
+  const [typing, setTyping] = useState(false);
+  const [text, setText] = useState('');
+  const list = splitDiets(value);
+  const has = d => list.some(x => x.toLowerCase() === d.toLowerCase());
+  const add = d => { d = d.trim(); if (d && !has(d)) onChange([...list, d].join(', ')); };
+  const remove = d => onChange(list.filter(x => x !== d).join(', '));
+  const addTyped = () => { add(text); setText(''); setTyping(false); };
+  return (
+    <span className="diet-picker">
+      {list.length > 0 && (
+        <span className="diet-list">
+          {list.map(d => (
+            <span key={d} className="diet">{d}<button type="button" onClick={() => remove(d)} title="Odstrani" aria-label={`Odstrani ${d}`}>×</button></span>
+          ))}
+        </span>
+      )}
+      {typing ? (
+        <span className="group-new">
+          <input value={text} onChange={e => setText(e.target.value)} placeholder="npr. brez paradižnika" autoFocus
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTyped(); } }} />
+          <button type="button" className="btn small" onClick={addTyped}>Dodaj</button>
+          <button type="button" className="btn small ghost" onClick={() => { setText(''); setTyping(false); }}>Prekliči</button>
+        </span>
+      ) : (
+        <select value="" onChange={e => (e.target.value === '@new' ? setTyping(true) : add(e.target.value))}>
+          <option value="">{list.length ? '+ Dodaj še eno dieto …' : '— brez posebne diete —'}</option>
+          {COMMON_DIETS.filter(d => !has(d)).map(d => <option key={d} value={d}>{d}</option>)}
+          <option value="@new">Drugo (vpiši) …</option>
+        </select>
+      )}
+    </span>
   );
 }
 

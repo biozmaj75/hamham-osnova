@@ -543,3 +543,8 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .report-days .mini { display: inline-block; min-width: 16px; margin: 0 1px; padding: 1px 2px; border-radius: 3px; font-size: 10px; font-weight: 600; }
 .report-days .mini.off { color: #c9c0ae; }
 .report-days .day-total { font-size: 11px; color: var(--ink-2); }
+.diet-picker { display: flex; flex-direction: column; gap: 6px; }
+.diet-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.diet-list .diet { max-width: none; font-size: 12px; padding: 2px 4px 2px 9px; }
+.diet-list .diet button { border: 0; background: none; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; border-radius: 99px; }
+.diet-list .diet button:hover { background: rgba(0,0,0,0.08); }
