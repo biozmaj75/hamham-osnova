@@ -184,8 +184,7 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
         <label>Ime<input value={s.first_name} onChange={e => set('first_name', e.target.value)} readOnly={ro} autoFocus={!ro} /></label>
         <label>Priimek<input value={s.last_name} onChange={e => set('last_name', e.target.value)} readOnly={ro} /></label>
         <label className={full ? '' : 'span2'}>Skupina
-          <input list="groups" value={s.group_name} onChange={e => set('group_name', e.target.value)} placeholder="npr. 3. skupina" readOnly={ro} />
-          <datalist id="groups">{groups.map(g => <option key={g} value={g} />)}</datalist>
+          {ro ? <input value={s.group_name} readOnly /> : <GroupSelect value={s.group_name} groups={groups} onChange={v => set('group_name', v)} />}
         </label>
         {full && <label>Soba<input value={s.room} onChange={e => set('room', e.target.value)} /></label>}
         <label><span>Posebna dieta <small>kuhinja jo vidi</small></span>
@@ -300,6 +299,27 @@ function DetailsTab({ tab, details, set }) {
       )}
       {tab === 'contact' && <p className="hint span2">Kontaktne podatke vidijo samo vzgojitelji, ravnatelj in skrbnik – kuhinja in organizator prehrane ne.</p>}
     </>
+  );
+}
+
+// Pick one of the home's groups; "Nova skupina …" switches to typing a new name
+function GroupSelect({ value, groups, onChange }) {
+  const [typing, setTyping] = useState(false);
+  const list = value && !groups.includes(value) ? [...groups, value].sort() : groups;
+  if (typing) {
+    return (
+      <span className="group-new">
+        <input value={value} onChange={e => onChange(e.target.value)} placeholder="npr. 7. skupina" autoFocus />
+        <button type="button" className="btn small ghost" onClick={() => { setTyping(false); if (!value.trim()) onChange(''); }}>Seznam</button>
+      </span>
+    );
+  }
+  return (
+    <select value={value} onChange={e => (e.target.value === '@new' ? (setTyping(true), onChange('')) : onChange(e.target.value))}>
+      <option value="">— brez skupine —</option>
+      {list.map(g => <option key={g} value={g}>{g}</option>)}
+      <option value="@new">+ Nova skupina …</option>
+    </select>
   );
 }
 
