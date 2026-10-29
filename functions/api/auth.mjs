@@ -8,12 +8,24 @@ export function hashPassword(password) {
   return `${salt}:${hash}`;
 }
 
+const DUMMY_SALT = '00000000000000000000000000000000';
+const DUMMY_HASH_BUF = Buffer.alloc(64, 0);
+
 export function verifyPassword(password, stored) {
-  if (!stored || !stored.includes(':')) return false;
-  const [salt, hash] = stored.split(':');
-  const test = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, 'hex');
-  return expected.length === test.length && crypto.timingSafeEqual(expected, test);
+  const isWellFormed = typeof stored === 'string' && stored.includes(':');
+  const [salt, hashHex] = isWellFormed ? stored.split(':') : [DUMMY_SALT, ''];
+
+  const expected = Buffer.from(hashHex || '', 'hex');
+  const validLength = expected.length === 64;
+
+  // Always compute scrypt key to prevent timing attacks on hash presence or format
+  const test = crypto.scryptSync(String(password || ''), salt || DUMMY_SALT, 64);
+
+  // Safely compare using timingSafeEqual with fixed-length buffers
+  const compareBuf = validLength ? expected : DUMMY_HASH_BUF;
+  const match = crypto.timingSafeEqual(compareBuf, test);
+
+  return isWellFormed && validLength && match;
 }
 
 export function signToken(payload, secret) {
