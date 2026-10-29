@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2, DoorOpen, FileText } from 'lucide-react';
 import { api } from './api.js';
 import { readXlsx, excelDate } from './xlsx.js';
-import { DETAIL_FIELDS, detailColumns, rowDetails } from './details.js';
+import { DETAIL_FIELDS, LEGACY_DETAILS, detailColumns, rowDetails } from './details.js';
 import Modal from './Modal.jsx';
 import IzpisnicaForm from './Izpisnica.jsx';
 import OsebniListForm from './OsebniList.jsx';
@@ -273,7 +273,7 @@ function StudentForm({ student, groups, full, me, onClose, onSaved, onChanged })
   );
 }
 
-const KNOWN_DETAILS = new Set(DETAIL_FIELDS.map(([k]) => k));
+const KNOWN_DETAILS = new Set([...DETAIL_FIELDS.map(([k]) => k), ...LEGACY_DETAILS]);
 
 // Contacts (student, mother, father) or everything else from the register, grouped in sections
 function DetailsTab({ tab, details, set }) {

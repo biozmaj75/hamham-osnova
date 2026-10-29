@@ -11,13 +11,11 @@ export const DETAIL_FIELDS = [
   ['temp_address', 'Začasni naslov', 'contact', 'Dijak', h => h.startsWith('zacasni naslov')],
   ['email', 'E-naslov', 'contact', 'Dijak', h => h === 'e naslov' || h === 'email', 'email'],
   ['phone', 'Mobitel', 'contact', 'Dijak', h => h === 'mobitel' || h === 'telefon', 'phone'],
-  ['mother', 'Mati', 'contact', 'Mati', h => h === 'mati'],
   ['mother_last', 'Priimek', 'contact', 'Mati', h => h === 'mati priimek' || h === 'priimek mati'],
   ['mother_first', 'Ime', 'contact', 'Mati', h => h === 'mati ime' || h === 'ime mati'],
   ['mother_address', 'Naslov', 'contact', 'Mati', h => h === 'naslov mati'],
   ['mother_email', 'E-naslov', 'contact', 'Mati', h => h === 'e naslov mati', 'email'],
   ['mother_phone', 'Mobitel', 'contact', 'Mati', h => h === 'mobitel mati', 'phone'],
-  ['father', 'Oče', 'contact', 'Oče', h => h === 'oce'],
   ['father_last', 'Priimek', 'contact', 'Oče', h => h === 'priimek oce' || h === 'oce priimek'],
   ['father_first', 'Ime', 'contact', 'Oče', h => h === 'ime oce' || h === 'oce ime'],
   ['father_address', 'Naslov', 'contact', 'Oče', h => h === 'naslov oce'],
@@ -50,6 +48,10 @@ export const DETAIL_FIELDS = [
   ['father_tax_no', 'Davčna št. – oče', 'other', 'Starši', h => h === 'ds oce', 'tax'],
 ];
 
+// A register column with a parent's full name ("Mati", "Oče") is split into the first/last name fields
+const FULL_NAME_HEADS = { mati: 'mother', oce: 'father' };
+export const LEGACY_DETAILS = Object.values(FULL_NAME_HEADS);
+
 // Columns that are part of the basic record (name, group, diet …), not details
 const CORE_HEADS = ['priimek', 'ime', 'in ime', 'vzgojna skupina', 'skupina', 'dieta', 'posebna dieta', 'soba'];
 
@@ -80,6 +82,7 @@ export function detailColumns(headerRow, usedCols) {
   (headerRow || []).forEach((raw, i) => {
     const h = headKey(raw);
     if (!h || usedCols.includes(i) || CORE_HEADS.includes(h) || h.startsWith('zap')) return;
+    if (FULL_NAME_HEADS[h]) { out.push([i, FULL_NAME_HEADS[h], null]); return; }
     const f = DETAIL_FIELDS.find(([key, , , , match]) => !taken.has(key) && match(h));
     if (f) { taken.add(f[0]); out.push([i, f[0], f[5]]); } else out.push([i, String(raw).trim().slice(0, 80), null]);
   });
@@ -91,6 +94,14 @@ export function rowDetails(row, columns) {
   for (const [i, key, type] of columns) {
     const v = cellText(row[i] ?? '', type);
     if (v) d[key] = v;
+  }
+  for (const who of LEGACY_DETAILS) {
+    const full = d[who];
+    delete d[who];
+    if (!full || d[`${who}_first`] || d[`${who}_last`]) continue;
+    const parts = full.split(/\s+/);
+    if (parts.length > 1) d[`${who}_last`] = parts.pop();
+    d[`${who}_first`] = parts.join(' ');
   }
   return d;
 }
