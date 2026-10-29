@@ -25,14 +25,14 @@ export async function unzip(buffer) {
     files.set(name, { method, size, local });
     p += 46 + nameLen + extraLen + commentLen;
   }
-  const read = async name => {
+  const read = async (name, binary) => {
     const f = files.get(name);
     if (!f) return null;
     const start = f.local + 30 + view.getUint16(f.local + 26, true) + view.getUint16(f.local + 28, true);
     const raw = new Uint8Array(buffer, start, f.size);
-    if (f.method === 0) return dec.decode(raw);
-    const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
-    return new Response(stream).text();
+    if (f.method === 0) return binary ? raw.slice() : dec.decode(raw);
+    const res = new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')));
+    return binary ? new Uint8Array(await res.arrayBuffer()) : res.text();
   };
   read.names = [...files.keys()];
   return read;
@@ -126,7 +126,7 @@ export function zip(files, type = 'application/vnd.openxmlformats-officedocument
   let offset = 0;
   for (const [name, text] of files) {
     const nameBytes = enc.encode(name);
-    const data = enc.encode(text);
+    const data = typeof text === 'string' ? enc.encode(text) : text; // images and other binary parts as bytes
     const crc = crc32(data);
     const head = new DataView(new ArrayBuffer(30));
     head.setUint32(0, 0x04034b50, true);

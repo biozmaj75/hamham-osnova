@@ -637,3 +637,13 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .diet-dialog li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 8px; border-bottom: 1px solid var(--rule); font-size: 14px; }
 .diet-dialog .diet-text { font-weight: 600; color: #5b2d7a; }
 @media print { .diet-count { border: 0; background: none; padding: 0; } .diet-count.flag { text-decoration: underline; } }
+/* Osebni list form */
+.doc-buttons { display: inline-flex; gap: 4px; margin-left: auto; }
+.move-out-fields.four { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 700px) { .move-out-fields.four { grid-template-columns: 1fr 1fr; } }
+.ol-years { overflow-x: auto; margin-bottom: 8px; }
+.ol-years table { border-collapse: collapse; font-size: 12px; }
+.ol-years th { text-align: left; font-weight: 600; padding: 3px 6px 3px 0; white-space: nowrap; }
+.ol-years thead th { text-align: center; }
+.ol-years td { padding: 2px; }
+.ol-years td input { width: 140px; padding: 4px 6px; font-size: 12px; }

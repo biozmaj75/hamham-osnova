@@ -5,6 +5,7 @@ import { readXlsx, excelDate } from './xlsx.js';
 import { DETAIL_FIELDS, detailColumns, rowDetails } from './details.js';
 import Modal from './Modal.jsx';
 import IzpisnicaForm from './Izpisnica.jsx';
+import OsebniListForm from './OsebniList.jsx';
 import { loginSlipsPdf, openPdf, pdfTab } from './pdf.js';
 import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, WEEKDAYS, DEF_COL, ROLE_NAME, fmtDay, studentName, plural } from './meals.js';
 
@@ -560,6 +561,7 @@ function MoveOutBox({ student, details, onDone }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [izpis, setIzpis] = useState(false);
+  const [osebni, setOsebni] = useState(false);
   const name = studentName(student);
 
   function open() {
@@ -588,7 +590,10 @@ function MoveOutBox({ student, details, onDone }) {
   return (
     <section className="side-box move-out">
       <h4><DoorOpen size={15} /> Bivanje v domu
-        {!izpis && <button type="button" className="btn small ghost" onClick={() => setIzpis(true)}><FileText size={14} /> Izpisnica</button>}
+        <span className="doc-buttons">
+          {!osebni && <button type="button" className="btn small ghost" onClick={() => setOsebni(true)}><FileText size={14} /> Osebni list</button>}
+          {!izpis && <button type="button" className="btn small ghost" onClick={() => setIzpis(true)}><FileText size={14} /> Izpisnica</button>}
+        </span>
       </h4>
       {gone ? (
         <>
@@ -618,6 +623,7 @@ function MoveOutBox({ student, details, onDone }) {
           </div>
         </div>
       )}
+      {osebni && <OsebniListForm student={student} details={details || {}} onClose={() => setOsebni(false)} />}
       {izpis && (
         <IzpisnicaForm student={student} details={details || {}}
           leftOn={asking ? date : student.left_on || ''} reason={asking ? reason : details?.left_reason || ''}
