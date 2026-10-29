@@ -627,3 +627,13 @@ table.list.compact td, table.list.compact th { padding: 6px 10px; font-size: 13p
 .guard-chip:hover { border-color: #c9a227; background: #fffaf0; }
 .guard-planned { display: flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; background: #f1ecfa; color: #5b3fa3; border-radius: 6px; font-size: 13px; }
 .att-away-form textarea { width: 100%; resize: vertical; }
+/* Special diets in the kitchen counts */
+.chip.diet { background: #ead9f2; color: #5b2d7a; }
+.diet-count { min-width: 30px; border: 1px solid #c7a6dc; background: #f6eefb; color: #4a2366; border-radius: 4px; padding: 1px 8px; font: inherit; font-weight: 700; cursor: pointer; }
+.diet-count:hover { background: #fff; }
+.diet-count.flag { background: #fbe0cf; border-color: #e3a27a; color: #8a3d12; }
+.week-table .diet-row td { background: #faf6fc; }
+.diet-dialog { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.diet-dialog li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 8px; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.diet-dialog .diet-text { font-weight: 600; color: #5b2d7a; }
+@media print { .diet-count { border: 0; background: none; padding: 0; } .diet-count.flag { text-decoration: underline; } }

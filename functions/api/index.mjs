@@ -558,7 +558,13 @@ async function kitchenWeek(ck, from) {
   const { rows } = await getPool().query(`
     select day, meal::text as meal, variant, count(*)::int as n from orders
     where day between $1 and $2 and variant <> 'none' group by day, meal, variant`, [days[0], days[4]]);
-  return { days, counts: rows, closed: await closedSet(days[0], days[4]) };
+  // Orders of students with a special diet: the kitchen counts them apart from the regular variants
+  const { rows: diets } = await getPool().query(`
+    select o.day, o.meal::text as meal, o.variant, s.id, s.first_name, s.last_name, s.group_name, s.diet
+    from orders o join students s on s.id = o.student_id
+    where o.day between $1 and $2 and o.variant <> 'none' and s.diet <> ''
+    order by s.last_name, s.first_name`, [days[0], days[4]]);
+  return { days, counts: rows, diets, closed: await closedSet(days[0], days[4]) };
 }
 
 // ---------------------------------------------------------------- menu
