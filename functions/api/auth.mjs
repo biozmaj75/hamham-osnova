@@ -23,10 +23,15 @@ export function signToken(payload, secret) {
 }
 
 export function verifyToken(token, secret) {
-  if (!token || !token.includes('.')) return null;
-  const [body, sig] = token.split('.');
+  if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [body, sig] = parts;
   const expected = crypto.createHmac('sha256', secret).update(body).digest('base64url');
-  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  const sigBuf = Buffer.from(sig);
+  const expBuf = Buffer.from(expected);
+  // Verify matching byte lengths before calling timingSafeEqual to avoid unhandled RangeError (ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH)
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
     return payload.exp > Date.now() ? payload : null;
