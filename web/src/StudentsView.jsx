@@ -395,13 +395,13 @@ const IMPORT_FIELDS = [
 ];
 // An empty sheet in the format the import reads: the header row, one example student and a sheet with instructions
 function sampleXlsx() {
-  const base = [['Zap. št. dijaka', 101], ['Priimek', 'Novak'], ['Ime', 'Ana'], ['Vzgojna skupina', '1. skupina'],
+  const base = [['Zap. št. dijaka', ''], ['Priimek', 'Vzorčni'], ['Ime', 'Dijak'], ['Vzgojna skupina', '1. skupina'],
     ['Soba', '104'], ['Posebna dieta', ''], ['Izstop', '']];
   const cols = [...base, ...SAMPLE_COLUMNS.map(([, head, example]) => [head, example])];
   const help = [
     [{ v: 'Kako izpolniti preglednico za uvoz dijakov', bold: true }],
     [],
-    ['• En dijak v eni vrstici, od 2. vrstice naprej. Vrstico s primerom (Ana Novak) pred uvozom izbrišite.'],
+    ['• En dijak v eni vrstici, od 2. vrstice naprej. Vrstico s primerom (Dijak Vzorčni) pred uvozom izbrišite.'],
     ['• Obvezna sta samo Priimek in Ime. Vsi drugi stolpci so lahko prazni ali jih izbrišete.'],
     ['• Imen stolpcev v 1. vrstici ne spreminjajte, ker se po njih prepozna, kaj je v stolpcu. Vrstni red ni pomemben.'],
     ['• Zap. št. dijaka poveže vrstico z dijakom ob ponovnem uvozu: obstoječi dijak se posodobi, namesto da bi se dodal še enkrat.'],
