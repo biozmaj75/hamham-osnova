@@ -18,6 +18,12 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// Security headers: prevent MIME sniffing and framing attacks
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+};
+
 // How far ahead default orders are created when no school year is set
 const HORIZON_DAYS = 28;
 const MAX_RANGE_DAYS = 400;
@@ -58,7 +64,7 @@ class HttpError extends Error {
 }
 
 function json(data, statusCode = 200) {
-  return { statusCode, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(data) };
+  return { statusCode, headers: { 'Content-Type': 'application/json', ...CORS, ...SECURITY_HEADERS }, body: JSON.stringify(data) };
 }
 
 // ---------------------------------------------------------------- time
@@ -1334,7 +1340,11 @@ export const handler = async (event) => {
     const body = event.body
       ? JSON.parse(event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString() : event.body)
       : {};
-    const fn = actions[body.action];
+    // Security check: ensure action is a string and an own method of actions (avoid Object prototype lookup)
+    const actionName = typeof body.action === 'string' ? body.action : '';
+    const fn = Object.hasOwn(actions, actionName) && typeof actions[actionName] === 'function'
+      ? actions[actionName]
+      : null;
     if (!fn) return json({ error: 'Neznano dejanje' }, 400);
     await init();
     const ck = await clock();
