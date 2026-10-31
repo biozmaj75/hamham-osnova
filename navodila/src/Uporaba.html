@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<title>Dom Obroki – uporaba</title>
+<link rel="stylesheet" href="slog.css">
+</head>
+<body>
+
+<h1>Dom Obroki – hiter pregled funkcij</h1>
+<p class="podnaslov">Navodila za uporabo · vsi posnetki zaslona vsebujejo izmišljene podatke</p>
+
+<h2>1. Prijava in vloge</h2>
+<p>Aplikacijo odprete v brskalniku in se prijavite z <b>uporabniškim imenom</b> in <b>geslom</b>. Ob prvi prijavi z začasnim geslom vas aplikacija prosi, da si nastavite svoje (vsaj 8 znakov). Geslo kasneje spremenite z ikono ključa zgoraj desno, tam je tudi <b>Odjava</b>.</p>
+<figure><img src="slike/01-prijava.png"><figcaption>Prijavna stran</figcaption></figure>
+
+<p>Kaj kdo vidi, je odvisno od vloge:</p>
+<table>
+  <tr><th>Vloga</th><th>Zavihki</th></tr>
+  <tr><td>Skrbnik</td><td>Naročila, Jedilnik (urejanje), Kuhinja, Mesečni pregled, Prisotnost, Dijaki, Uporabniki, Nastavitve</td></tr>
+  <tr><td>Ravnatelj</td><td>Naročila, Jedilnik, Kuhinja, Mesečni pregled, Prisotnost, Dijaki, Uporabniki</td></tr>
+  <tr><td>Vzgojitelj</td><td>Naročila, Jedilnik, Kuhinja, Prisotnost, Dijaki</td></tr>
+  <tr><td>Organizator prehrane</td><td>Naročila, Jedilnik (urejanje), Kuhinja, Mesečni pregled, Dijaki (samo diete), Nastavitve</td></tr>
+  <tr><td>Kuhinja</td><td>Jedilnik, Kuhinja</td></tr>
+  <tr><td>Tajništvo</td><td>Jedilnik, Mesečni pregled</td></tr>
+  <tr><td>Nočni varnostnik</td><td>Prisotnost</td></tr>
+  <tr><td>Dijak</td><td>Moji obroki, Jedilnik</td></tr>
+</table>
+<p>Posameznemu zaposlenemu lahko skrbnik ali ravnatelj dodeli še <b>dodatne pravice</b> (npr. naročila ali jedilnik).</p>
+
+<h2>2. Kako delujejo naročila</h2>
+<ul>
+  <li><b>Obroki:</b> zajtrk in kosilo od ponedeljka do petka, večerja od ponedeljka do četrtka. Ob vikendih ni obrokov.</li>
+  <li><b>Različice:</b> Navadni (N), Vegetarijanski (V), pri kosilu in večerji še Suhi (SN/SV – paket) in Pozni (PN/PV – shranjen obrok), pri večerji Lahki (La). »Ni prijavljen« pomeni odjavo.</li>
+  <li><b>Samodejna prijava:</b> vsak dijak je za vse šolsko leto samodejno prijavljen po svojem <i>privzetem meniju</i> in <i>izjemah po dnevih</i> (npr. vsako sredo suho kosilo). Ročna sprememba ima prednost pred izjemo, izjema pred privzetim menijem.</li>
+  <li><b>Rok:</b> naročila za posamezen dan se zaprejo <b>dan prej ob 18.00</b> (uro nastavi skrbnik). Zaprti dnevi so označeni s ključavnico.</li>
+  <li><b>Kuhinja zaprta:</b> dnevi, ki jih organizator označi kot zaprte, se ne morejo naročiti.</li>
+</ul>
+
+<h2>3. Naročila</h2>
+<figure><img src="slike/02-narocila.png"><figcaption>Naročila – tabela dijakov po dnevih in obrokih</figcaption></figure>
+<ul>
+  <li>Tabela prikazuje teden: za vsak dan stolpce Za / Ko / Ve. Barva oznake pove različico; legenda je pod tabelo.</li>
+  <li>Zgoraj izberete teden (puščice, »Prvi odprti teden«), skupino (»Moje skupine«, »Cel dom« ali posamezna skupina) in iščete dijaka po imenu ali sobi.</li>
+  <li><b>Klik na celico</b> odpre izbiro: druga različica, »Ni prijavljen«, »Nazaj na privzeto«, ali za cel dan »Odjavi dan«.</li>
+  <li><b>Več dijakov naenkrat:</b> obkljukajte dijake, spodaj se pokaže vrstica z obdobjem Od–Do, obroki in »Nastavi na« (npr. Odsotnost, Ni prijavljen, Suhi …) → <b>Uporabi</b>. Odsotnost odjavi vse obroke v obdobju.</li>
+  <li>Pika na oznaki pomeni ročno spremembo, črtasta oznaka »O« odsotnost. Vrstica »Prijavljenih« sešteje obroke.</li>
+</ul>
+
+<h2>4. Jedilnik</h2>
+<figure><img src="slike/03-jedilnik.png"><figcaption>Jedilnik za teden</figcaption></figure>
+<ul>
+  <li>Vsi vidijo jedilnik tedna; z gumbom <b>Natisni</b> ga natisnete.</li>
+  <li>Skrbnik in organizator prehrane jedi vpisujeta neposredno v tabelo – shrani se ob Enter ali ko zapustite polje.</li>
+  <li><b>Kopiraj teden</b> prenese trenutni jedilnik v enega ali več zaporednih tednov (ciljni tedni se prepišejo).</li>
+</ul>
+
+<h2>5. Kuhinja</h2>
+<figure><img src="slike/04-kuhinja.png"><figcaption>Kuhinja – število obrokov za izbrani dan</figcaption></figure>
+<ul>
+  <li>Privzeto prikaže naslednji šolski dan. Zgoraj piše, ali so številke <b>dokončne</b> (rok je potekel) ali se še lahko spremenijo.</li>
+  <li>Za vsak obrok skupno število in število po različicah z jedjo. Vrstica <b>Posebne diete</b> pokaže, koliko obrokov je dietnih (klik prikaže dijake in diete).</li>
+  <li>Seznama <b>Suhi obroki (paketi)</b> in <b>Pozni obroki</b> z imeni, ter <b>Pregled tedna</b> (klik na dan odpre ta dan). Gumb <b>Natisni</b>.</li>
+  <li>Kuhinja vidi dieto, ne pa zdravstvenega razloga.</li>
+</ul>
+
+<h2>6. Mesečni pregled</h2>
+<figure><img src="slike/05-mesecni.png"><figcaption>Mesečni pregled za obračun</figcaption></figure>
+<ul>
+  <li>Za izbrani mesec in skupino prikaže <b>Povzetek</b> (zajtrki, kosila, od tega suha, večerje, skupaj) ali pogled <b>Po dnevih</b>.</li>
+  <li><b>Izvozi v Excel</b> naredi datoteko s tremi listi: Povzetek, Po dnevih, Dnevni seštevki.</li>
+  <li>Šteje samo naročene obroke; za dneve, ki še niso minili, se številke lahko še spremenijo.</li>
+</ul>
+
+<h2>7. Prisotnost (večerna)</h2>
+<figure><img src="slike/06-prisotnost.png"><figcaption>Večerna prisotnost od nedelje do četrtka</figcaption></figure>
+<ul>
+  <li>Kljukico »Prisoten« vpišeta vzgojitelj ali nočni varnostnik, in to le za današnji ali pretekle večere. Na večer prihoda v dom (nedelja ali po prazniku) sta stolpca dva: <i>varnostnik</i> in <i>vzgojitelj</i>.</li>
+  <li><b>Odsotnost</b> (klik na ime ali »+«): obdobje večerov in razlog. <b>Pozor:</b> večerna odsotnost ne odjavi obrokov – to naredite v Naročilih. Oranžna celica opozori, da dijaka ni, naslednji dan pa ima naročene obroke (gumb »odjavi«).</li>
+  <li><b>Desni klik</b> na celico: vzgojitelj vpiše načrtovan pozen prihod / opombo za varnostnika; varnostnik vpiše dejanski prihod in opombe (do 3 dni nazaj). Zapisi varnostnika so zbrani v razdelku nad tabelo.</li>
+</ul>
+
+<h2>8. Dijaki</h2>
+<figure><img src="slike/07-dijaki.png"><figcaption>Seznam dijakov</figcaption></figure>
+<ul>
+  <li>Seznam z iskanjem (tudi brez šumnikov), filtrom skupine in prikazom izseljenih.</li>
+  <li><b>Dodaj dijaka</b> ali <b>Uvozi seznam</b> iz Excela. Gumb <b>Vzorčna datoteka</b> prenese pravilno pripravljeno predlogo z navodili. Pred uvozom vidite predogled (novi / posodobljeni / izseljeni). Ponovni uvoz posodobi obstoječe dijake, prazne celice ničesar ne izbrišejo.</li>
+  <li><b>Stalne izjeme</b> – npr. vsem dijakom skupine vsako sredo suho kosilo. <b>Dostopi za dijake</b> – natisne PDF z uporabniškimi imeni in začasnimi gesli za celo skupino.</li>
+</ul>
+<figure><img src="slike/10-kartoteka.png"><figcaption>Kartoteka dijaka – zavihki Osnovno in prehrana, Kontakti, Ostalo</figcaption></figure>
+<ul>
+  <li><b>Osnovno in prehrana:</b> skupina, soba, posebna dieta (kuhinja jo vidi), zdravstveni razlog (kuhinja ga ne vidi), privzeti meni in izjeme po dnevih.</li>
+  <li><b>Kontakti</b> (dijak, mati, oče) in <b>Ostalo</b> (osebni podatki, šolanje, bivanje) – vidijo jih vzgojitelji, ravnatelj in skrbnik.</li>
+  <li><b>Izselitev:</b> odkljukajte »Živi v domu«, vpišite zadnji dan → obroki po tem dnevu se odjavijo, dostop se zapre.</li>
+  <li><b>Izpisnica</b> in <b>Osebni list</b> – predizpolnjena obrazca, ki ju dopolnite in prenesete kot Word (docx).</li>
+  <li><b>Odsotnosti</b> (obdobja, ko dijak ne je), <b>Dostop do aplikacije</b> (ustvari dostop / novo začasno geslo kot PDF) in <b>Zgodovina sprememb</b> (kdo je kaj spremenil pri obrokih).</li>
+</ul>
+
+<h2>9. Uporabniki</h2>
+<figure><img src="slike/08-uporabniki.png"><figcaption>Uporabniki – računi zaposlenih</figcaption></figure>
+<ul>
+  <li><b>Dodaj račun:</b> ime, uporabniško ime, vloga, za vzgojitelja njegove skupine, dodatne pravice in začasno geslo. Uporabnik si ob prvi prijavi nastavi svoje geslo.</li>
+  <li>Račun lahko zaklenete (npr. ob odhodu zaposlenega). V zavihku »Dijaki« so dostopi dijakov.</li>
+  <li><b>Pravice vlog</b> prikaže, kaj sme posamezna vloga, <b>Dnevnik sprememb</b> pa zadnjih 300 sprememb.</li>
+</ul>
+
+<h2>10. Nastavitve</h2>
+<figure><img src="slike/09-nastavitve.png"><figcaption>Nastavitve</figcaption></figure>
+<ul>
+  <li><b>Organizacija prehrane:</b> prvi in zadnji dan šolskega leta, kaj lahko dijaki izberejo sami, ali se lahko sami odjavijo, časi obrokov, poznega obroka in prevzema paketov.</li>
+  <li><b>Sistem</b> (samo skrbnik): ura zaprtja naročil in časovni pas.</li>
+  <li><b>Kuhinja zaprta:</b> dnevi ali obdobja brez obrokov (počitnice, prazniki) z razlogom.</li>
+</ul>
+
+<h2>11. Dijaki – Moji obroki</h2>
+<ul>
+  <li>Dijak vidi svoj teden po dnevih in pri vsakem obroku izbere različico, ki jo dovoli dom (npr. vegetarijanski ali suhi obrok). Pri obroku je vpisana jed iz jedilnika.</li>
+  <li>Odjavo in odsotnost lahko dijak vpiše sam le, če je to v Nastavitvah dovoljeno – sicer jo uredi vzgojitelj.</li>
+  <li>Spremembe so možne do roka (dan prej ob 18.00).</li>
+</ul>
+
+<h2>Prvi koraki za nov dom</h2>
+<ol>
+  <li><b>Nastavitve:</b> šolsko leto, časi obrokov, zaprti dnevi.</li>
+  <li><b>Uporabniki:</b> računi za vzgojitelje (s skupinami), kuhinjo, organizatorja prehrane, tajništvo, varnostnika.</li>
+  <li><b>Dijaki → Uvozi seznam</b> (najprej prenesite »Vzorčno datoteko«), nato diete in privzeti meniji; po potrebi <b>Dostopi za dijake</b> (listki z gesli).</li>
+  <li><b>Jedilnik</b> za prve tedne, nato <b>Kopiraj teden</b>.</li>
+</ol>
+
+</body>
+</html>

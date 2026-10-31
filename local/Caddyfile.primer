@@ -1,0 +1,7 @@
+# Caddy – javni dostop prek HTTPS (glejte Mreža.pdf, poglavje 5).
+# Ime zamenjajte s svojim; DNS zapis tega imena mora kazati na javni IP strežnika.
+# Caddy sam pridobi in obnavlja certifikat Let's Encrypt.
+obroki.vas-dom.si {
+	encode gzip
+	reverse_proxy 127.0.0.1:8080
+}

@@ -19,3 +19,6 @@ openkbs.local.json
 .agents/*
 !.agents/skills/
 !.agents/skills-off/
+
+# local install: settings with the database password
+local/nastavitve.env

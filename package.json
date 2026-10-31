@@ -1,0 +1,14 @@
+{
+  "name": "dom-obroki",
+  "private": true,
+  "type": "module",
+  "description": "Dom Obroki – lokalna namestitev (Windows/Linux). Navodila: navodila/Kakoinstaliram.pdf",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node local/server.mjs",
+    "admin": "node local/admin.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
+}

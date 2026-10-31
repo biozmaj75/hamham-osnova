@@ -11,7 +11,8 @@ export function getPool() {
   if (!pool) {
     pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: true },
+      // A database on the same computer or local network (local install) usually has no TLS
+      ssl: process.env.DATABASE_SSL === 'off' ? false : { rejectUnauthorized: true },
       max: 3,
       idleTimeoutMillis: 60_000,
       connectionTimeoutMillis: 5_000,

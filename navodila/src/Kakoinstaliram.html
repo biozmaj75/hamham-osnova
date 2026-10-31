@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<title>Dom Obroki – kako namestim aplikacijo</title>
+<link rel="stylesheet" href="slog.css">
+</head>
+<body>
+
+<h1>Dom Obroki – namestitev na lasten računalnik</h1>
+<p class="podnaslov">Navodila za Windows in Linux · za skrbnika sistema</p>
+
+<p>Dom Obroki lahko poleg oblačne različice teče tudi na običajnem računalniku ali strežniku v domu. Potrebujete:</p>
+<ul>
+  <li><b>Node.js</b> različice 22 ali novejše (izvaja aplikacijo),</li>
+  <li><b>PostgreSQL</b> (podatkovna baza, različica 14 ali novejša),</li>
+  <li>datoteke aplikacije (mapa z datotekami <code>package.json</code>, <code>local</code>, <code>functions</code>, <code>site</code>).</li>
+</ul>
+<p>Strojne zahteve so skromne: 2 jedri, 2–4 GB RAM in nekaj GB prostora na disku zadoščajo za dom s stotinami dijakov. Računalnik mora biti prižgan ves čas, ko aplikacijo uporabljate.</p>
+
+<div class="opomba"><b>Lokalna namestitev je ločena od oblačne.</b> Ima svojo bazo, svoje uporabnike in svoje podatke. Če želite podatke iz oblačne različice prenesti v lokalno, nam pišite – pripravimo izvoz baze, ki ga uvozite z ukazom <code>pg_restore</code> (poglavje 4).</div>
+
+<h3>Kje dobim datoteke</h3>
+<ul>
+  <li>Na GitHubu (zasebni repozitorij <code>biozmaj75/hamham-osnova</code>): prijavite se z računom, ki ima dostop, kliknite zeleni gumb <b>Code → Download ZIP</b> in ZIP razširite.</li>
+  <li>Ali pa nas prosite za pripravljen ZIP »dom-obroki-lokalno.zip«.</li>
+</ul>
+<p>Mapa <code>web</code> vsebuje izvorno kodo uporabniškega vmesnika in za delovanje ni potrebna – zgrajena aplikacija je že v mapi <code>site</code>.</p>
+
+<!-- ================================================================== -->
+<h2>1. Namestitev na Windows (10, 11 ali Windows Server)</h2>
+
+<h3><span class="korak">Korak 1.</span> Namestite Node.js</h3>
+<ol>
+  <li>Odprite <code>https://nodejs.org</code> in prenesite različico <b>LTS</b> (Windows Installer, .msi).</li>
+  <li>Namestitev zaženite in pustite privzete nastavitve (tudi »Add to PATH«).</li>
+  <li>Preverite: odprite <b>Ukazni poziv</b> (Start → vpišite <code>cmd</code>) in vpišite <code>node -v</code>. Izpisati se mora <code>v22…</code> ali višja številka.</li>
+</ol>
+
+<h3><span class="korak">Korak 2.</span> Namestite PostgreSQL</h3>
+<ol>
+  <li>Odprite <code>https://www.postgresql.org/download/windows/</code> in prenesite namestitveni program (»Download the installer«, EDB) za zadnjo različico.</li>
+  <li>Med namestitvijo:
+    <ul>
+      <li>komponente: dovolj so <i>PostgreSQL Server</i> in <i>Command Line Tools</i> (pgAdmin je neobvezen),</li>
+      <li>določite geslo za skrbniškega uporabnika <code>postgres</code> in si ga <b>zapišite na varno</b>,</li>
+      <li>vrata pustite <code>5432</code>, »Stack Builder« na koncu ni potreben.</li>
+    </ul>
+  </li>
+  <li>PostgreSQL se namesti kot Windows storitev in se samodejno zažene ob vsakem vklopu računalnika.</li>
+</ol>
+
+<h3><span class="korak">Korak 3.</span> Ustvarite bazo za aplikacijo</h3>
+<p>V meniju Start odprite <b>SQL Shell (psql)</b>. Na vprašanja za Server, Database, Port in Username pritisnite Enter, nato vpišite geslo uporabnika <code>postgres</code>. Vpišite (geslo <code>IzberiteGeslo123</code> zamenjajte s svojim):</p>
+<pre><code>CREATE USER obroki WITH PASSWORD 'IzberiteGeslo123';
+CREATE DATABASE obroki OWNER obroki;
+\q</code></pre>
+<div class="nasvet">Za geslo baze uporabite le črke in številke (brez <code>@ : / % #</code>), sicer ga je treba v naslovu baze posebej kodirati.</div>
+
+<h3><span class="korak">Korak 4.</span> Prenesite aplikacijo in jo nastavite</h3>
+<ol>
+  <li>Razširite ZIP v mapo, npr. <code>C:\DomObroki</code> (tako da je datoteka <code>C:\DomObroki\package.json</code>).</li>
+  <li>V mapi <code>C:\DomObroki\local</code> naredite kopijo datoteke <code>nastavitve.env.primer</code> in jo preimenujte v <code>nastavitve.env</code>.
+    (V Raziskovalcu vklopite <i>Pogled → Pripone imen datotek</i>, da datoteka ne dobi imena <code>nastavitve.env.txt</code>.)</li>
+  <li>Datoteko <code>nastavitve.env</code> odprite z Beležnico in v vrstici <code>DATABASE_URL</code> besedo <code>GESLO</code> zamenjajte z geslom iz koraka 3:
+<pre><code>DATABASE_URL=postgres://obroki:IzberiteGeslo123@localhost:5432/obroki
+DATABASE_SSL=off
+HOST=127.0.0.1
+PORT=8080</code></pre>
+  </li>
+</ol>
+<div class="pozor">Datoteka <code>nastavitve.env</code> vsebuje geslo baze. Ne pošiljajte je po e-pošti in je ne kopirajte na skupne mape.</div>
+
+<h3><span class="korak">Korak 5.</span> Namestite knjižnice in ustvarite administratorja</h3>
+<p>Odprite Ukazni poziv in vpišite:</p>
+<pre><code>cd C:\DomObroki
+npm install --omit=dev
+npm run admin</code></pre>
+<p>Program <code>npm run admin</code> ob prvem zagonu ustvari tabele v bazi in vpraša za uporabniško ime, ime in priimek ter geslo (vsaj 8 znakov) prvega administratorja.</p>
+
+<h3><span class="korak">Korak 6.</span> Zaženite aplikacijo</h3>
+<p>Dvokliknite <code>C:\DomObroki\local\zazeni.bat</code>. Odpre se črno okno z izpisom</p>
+<pre><code>Dom Obroki teče na http://localhost:8080  (ustavite s Ctrl+C)</code></pre>
+<p>V brskalniku odprite <b>http://localhost:8080</b> in se prijavite z administratorjem iz koraka 5. Okno mora ostati odprto, dokler aplikacijo uporabljate.</p>
+<p>Nato v aplikaciji: <b>Nastavitve</b> (šolsko leto, časi obrokov), <b>Uporabniki</b> (računi za zaposlene), <b>Dijaki → Uvozi seznam</b> in <b>Jedilnik</b>. Podrobnosti so v <i>Uporaba.pdf</i>.</p>
+
+<h3><span class="korak">Korak 7.</span> Samodejni zagon ob vklopu računalnika (priporočeno)</h3>
+<p>Da aplikacija teče tudi, ko nihče ni prijavljen v Windows, jo registrirajte kot opravilo. Odprite <b>PowerShell kot skrbnik</b> (desni klik na Start → Terminal (skrbnik)) in vpišite:</p>
+<pre><code>$a = New-ScheduledTaskAction -Execute "C:\Program Files\nodejs\node.exe" -Argument "C:\DomObroki\local\server.mjs"
+$t = New-ScheduledTaskTrigger -AtStartup
+$s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName "Dom Obroki" -Action $a -Trigger $t -Settings $s -User "SYSTEM" -RunLevel Highest
+Start-ScheduledTask -TaskName "Dom Obroki"</code></pre>
+<p>Opravilo vidite v <i>Razporejevalniku opravil</i> (Task Scheduler). Ustavite ga z <code>Stop-ScheduledTask -TaskName "Dom Obroki"</code>. Ko teče kot opravilo, okna <code>zazeni.bat</code> ne zaganjajte hkrati (vrata bi bila zasedena).</p>
+
+<!-- ================================================================== -->
+<h2 class="nova-stran">2. Namestitev na Linux (Ubuntu / Debian)</h2>
+<p>Navodila veljajo za Ubuntu 24.04 ali novejši in Debian 12 ali novejši. Ukaze vpisujete v terminal kot uporabnik s pravico <code>sudo</code>. Za AlmaLinux / Rocky namesto <code>apt</code> uporabite <code>dnf</code> (paketa <code>nodejs</code> in <code>postgresql-server</code>, nato <code>sudo postgresql-setup --initdb</code>).</p>
+
+<h3><span class="korak">Korak 1.</span> Node.js in PostgreSQL</h3>
+<pre><code>sudo apt update
+sudo apt install -y curl unzip postgresql
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v          # mora biti v22 ali višje</code></pre>
+<p>(Če ima distribucija v svojih paketih Node.js 22 ali novejši, zadošča <code>sudo apt install nodejs npm</code>.)</p>
+
+<h3><span class="korak">Korak 2.</span> Baza</h3>
+<pre><code>sudo -u postgres psql -c "CREATE USER obroki WITH PASSWORD 'IzberiteGeslo123';"
+sudo -u postgres psql -c "CREATE DATABASE obroki OWNER obroki;"</code></pre>
+
+<h3><span class="korak">Korak 3.</span> Sistemski uporabnik in datoteke</h3>
+<pre><code>sudo useradd --system --home /opt/dom-obroki --shell /usr/sbin/nologin obroki
+sudo mkdir -p /opt/dom-obroki
+sudo unzip dom-obroki.zip -d /tmp/dom-obroki     # ali git clone
+sudo cp -r /tmp/dom-obroki/*/. /opt/dom-obroki/   # vsebina mape s package.json
+cd /opt/dom-obroki
+sudo cp local/nastavitve.env.primer local/nastavitve.env
+sudo nano local/nastavitve.env                    # vpišite geslo baze
+sudo chown -R obroki:obroki /opt/dom-obroki
+sudo chmod 600 local/nastavitve.env</code></pre>
+
+<h3><span class="korak">Korak 4.</span> Knjižnice in prvi administrator</h3>
+<pre><code>cd /opt/dom-obroki
+sudo -u obroki npm install --omit=dev
+sudo -u obroki npm run admin</code></pre>
+
+<h3><span class="korak">Korak 5.</span> Preizkus in stalna storitev</h3>
+<p>Hiter preizkus: <code>sudo -u obroki ./local/zazeni.sh</code> in v brskalniku <b>http://localhost:8080</b> (ustavite s Ctrl+C). Za stalno delovanje uporabite priloženo systemd storitev:</p>
+<pre><code>sudo cp /opt/dom-obroki/local/dom-obroki.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now dom-obroki
+systemctl status dom-obroki          # stanje
+journalctl -u dom-obroki -f          # dnevnik (izhod s Ctrl+C)</code></pre>
+<p>Storitev se zažene ob vklopu strežnika in se po morebitni napaki sama znova zažene. Če je <code>node</code> nameščen drugje kot <code>/usr/bin/node</code> (preverite z <code>which node</code>), popravite vrstico <code>ExecStart</code>.</p>
+
+<!-- ================================================================== -->
+<h2>3. Dostop z drugih računalnikov</h2>
+<p>Privzeto (<code>HOST=127.0.0.1</code>) je aplikacija dosegljiva <b>samo na računalniku, kjer teče</b>. Da jo odprete tudi z drugih računalnikov v domu, v <code>nastavitve.env</code> nastavite <code>HOST=0.0.0.0</code>, odprite vrata v požarnem zidu in aplikacijo ponovno zaženite. Natančna navodila – lokalno omrežje, domena, dostop od zunaj, internet in Arnesov strežnik – so v ločenem dokumentu <b>Mreža.pdf</b>.</p>
+
+<!-- ================================================================== -->
+<h2>4. Varnostne kopije in obnova</h2>
+<div class="pozor">Za varnostne kopije lokalne namestitve skrbite sami. Brez njih okvara diska pomeni izgubo vseh podatkov.</div>
+<h3>Windows</h3>
+<p>Ustvarite mapo <code>C:\Varnostne</code> in z Beležnico datoteko <code>C:\DomObroki\local\kopija.ps1</code> z vsebino (številko <code>18</code> zamenjajte z nameščeno različico PostgreSQL):</p>
+<pre><code>$env:PGPASSWORD = 'IzberiteGeslo123'
+&amp; "C:\Program Files\PostgreSQL\18\bin\pg_dump.exe" -h localhost -U obroki -F c -f "C:\Varnostne\obroki-$(Get-Date -Format yyyy-MM-dd).dump" obroki
+Get-ChildItem C:\Varnostne\obroki-*.dump | Where-Object LastWriteTime -lt (Get-Date).AddDays(-60) | Remove-Item</code></pre>
+<p>Vsakodnevno kopijo ob 22.00 nastavite v PowerShellu (kot skrbnik):</p>
+<pre><code>$a = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File C:\DomObroki\local\kopija.ps1"
+Register-ScheduledTask -TaskName "Dom Obroki kopija" -Action $a -Trigger (New-ScheduledTaskTrigger -Daily -At 22:00) -User "SYSTEM"</code></pre>
+<p>Kopije, starejše od 60 dni, se brišejo same. Datoteke iz <code>C:\Varnostne</code> redno kopirajte na drug disk, NAS ali v oblak (npr. Arnes Shramba). Ker <code>kopija.ps1</code> vsebuje geslo baze, naj bo dostopna le skrbnikom.</p>
+<h3>Linux</h3>
+<pre><code>sudo mkdir -p /var/backups/obroki && sudo chown postgres /var/backups/obroki
+echo '30 22 * * * postgres pg_dump -F c -f /var/backups/obroki/obroki-$(date +\%F).dump obroki && find /var/backups/obroki -mtime +60 -delete' | sudo tee /etc/cron.d/dom-obroki</code></pre>
+<h3>Obnova iz kopije</h3>
+<pre><code>pg_restore -h localhost -U obroki -d obroki --clean --if-exists obroki-2026-11-02.dump</code></pre>
+<p>Pred obnovo aplikacijo ustavite in jo po obnovi spet zaženite.</p>
+
+<!-- ================================================================== -->
+<h2>5. Vzdrževanje</h2>
+<h3>Pozabljeno geslo administratorja</h3>
+<p>Na strežniku v mapi aplikacije zaženite <code>npm run admin</code> (Linux: <code>sudo -u obroki npm run admin</code>), vpišite uporabniško ime in novo geslo. Račun se hkrati odklene.</p>
+<h3>Posodobitev na novo različico</h3>
+<ol>
+  <li>Naredite varnostno kopijo baze (poglavje 4) in ustavite aplikacijo.</li>
+  <li>Nove datoteke skopirajte čez stare – <b>datoteke <code>local/nastavitve.env</code> ne prepišite</b>.</li>
+  <li>Zaženite <code>npm install --omit=dev</code> in aplikacijo znova zaženite (Linux: <code>sudo systemctl restart dom-obroki</code>). Morebitne spremembe tabel se izvedejo samodejno.</li>
+  <li>Uporabniki naj v brskalniku stran osvežijo (F5).</li>
+</ol>
+<h3>Pogoste težave</h3>
+<table>
+  <tr><th>Sporočilo / težava</th><th>Rešitev</th></tr>
+  <tr><td>Manjka datoteka local/nastavitve.env</td><td>Korak 4: kopirajte <code>nastavitve.env.primer</code> v <code>nastavitve.env</code> (pazite na pripono .txt).</td></tr>
+  <tr><td>Vrata 8080 že uporablja drug program</td><td>V <code>nastavitve.env</code> nastavite npr. <code>PORT=8081</code> ali ustavite drugo kopijo aplikacije.</td></tr>
+  <tr><td>password authentication failed for user "obroki"</td><td>Geslo v <code>DATABASE_URL</code> se ne ujema z geslom iz koraka 3.</td></tr>
+  <tr><td>ECONNREFUSED … 5432</td><td>PostgreSQL ne teče. Windows: <i>Storitve</i> → postgresql → Zaženi. Linux: <code>sudo systemctl start postgresql</code>.</td></tr>
+  <tr><td>'node' is not recognized</td><td>Node.js ni nameščen ali Ukazni poziv odprt pred namestitvijo – odprite novega.</td></tr>
+  <tr><td>Z drugega računalnika se stran ne odpre</td><td>Glejte <i>Mreža.pdf</i> (HOST=0.0.0.0 in požarni zid).</td></tr>
+</table>
+
+</body>
+</html>

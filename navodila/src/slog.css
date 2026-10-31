@@ -1,0 +1,26 @@
+@page { size: A4; margin: 18mm 17mm 18mm 17mm; }
+* { box-sizing: border-box; }
+body { font-family: "DejaVu Sans", "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #222; margin: 0; }
+h1 { font-size: 22pt; margin: 0 0 4pt; color: #8a2c1d; }
+.podnaslov { color: #666; margin: 0 0 14pt; }
+h2 { font-size: 14.5pt; color: #8a2c1d; border-bottom: 1.5pt solid #e6d5c3; padding-bottom: 3pt; margin: 18pt 0 8pt; break-after: avoid; }
+h3 { font-size: 11.5pt; margin: 12pt 0 5pt; break-after: avoid; }
+p { margin: 0 0 6pt; }
+ul, ol { margin: 0 0 7pt; padding-left: 18pt; }
+li { margin-bottom: 2.5pt; }
+code, pre { font-family: "DejaVu Sans Mono", Consolas, monospace; font-size: 8.8pt; }
+code { background: #f4efe8; padding: 0 2.5pt; border-radius: 2pt; }
+pre { background: #f6f2ec; border: 1pt solid #e2d8cb; border-radius: 4pt; padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word; break-inside: avoid; }
+pre code { background: none; padding: 0; }
+.opomba { background: #fdf6e3; border-left: 3.5pt solid #d9a52b; padding: 6pt 9pt; margin: 6pt 0 9pt; break-inside: avoid; }
+.pozor { background: #fbecea; border-left: 3.5pt solid #b8412e; padding: 6pt 9pt; margin: 6pt 0 9pt; break-inside: avoid; }
+.nasvet { background: #edf5ec; border-left: 3.5pt solid #4f8a4b; padding: 6pt 9pt; margin: 6pt 0 9pt; break-inside: avoid; }
+table { border-collapse: collapse; width: 100%; margin: 4pt 0 9pt; font-size: 9.5pt; break-inside: avoid; }
+th, td { border: 0.8pt solid #d8cfc4; padding: 3pt 5pt; text-align: left; vertical-align: top; }
+th { background: #f3ece3; }
+figure { margin: 6pt 0 10pt; break-inside: avoid; }
+figure img { width: 100%; border: 0.8pt solid #ccc; border-radius: 3pt; }
+figcaption { font-size: 8.8pt; color: #666; margin-top: 2pt; }
+.kazalo { columns: 2; font-size: 10pt; }
+.nova-stran { break-before: page; }
+.korak { font-weight: bold; color: #8a2c1d; }

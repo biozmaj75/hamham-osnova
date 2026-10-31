@@ -1,4 +1,5 @@
-const API_BASE = 'https://2ra4to2hk6ywoqgcfs2qlcy7fe0uybsk.lambda-url.eu-central-1.on.aws';
+// The site and the API share one address: CloudFront forwards /api to the cloud function, the local server (local/server.mjs) serves both
+const API_BASE = '/api';
 
 const TOKEN_KEY = 'dorm-meals-token';
 

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<title>Dom Obroki – omrežje in strežnik</title>
+<link rel="stylesheet" href="slog.css">
+</head>
+<body>
+
+<h1>Dom Obroki – omrežje, dostop in strežnik</h1>
+<p class="podnaslov">Navodila za skrbnika omrežja · dopolnilo k Kakoinstaliram.pdf</p>
+
+<h2>1. Pregled možnosti</h2>
+<table>
+  <tr><th>Kdo naj dostopa</th><th>Rešitev</th><th>Poglavje</th></tr>
+  <tr><td>Samo računalnik, na katerem aplikacija teče</td><td><code>HOST=127.0.0.1</code> (privzeto)</td><td>2</td></tr>
+  <tr><td>Računalniki v lokalnem omrežju / domeni doma</td><td><code>HOST=0.0.0.0</code>, požarni zid omejen na lokalno omrežje, DNS ime v domeni</td><td>3</td></tr>
+  <tr><td>V domeni in tudi od zunaj (zaposleni od doma)</td><td>VPN v omrežje doma (priporočeno) ali objava na internetu</td><td>4</td></tr>
+  <tr><td>Kdorkoli z interneta (npr. dijaki s telefoni)</td><td>Strežnik z javnim IP, ime v DNS, HTTPS prek Caddy</td><td>5</td></tr>
+  <tr><td>Kot zgoraj, a na strežniku Arnes</td><td>Arnes »Strežnik po meri«</td><td>6</td></tr>
+</table>
+<div class="nasvet"><b>Oblačna različica je že dosegljiva z interneta</b> (HTTPS, varnostne kopije baze in posodobitve urejamo mi). Lokalno namestitev potrebujete le, če želite, da podatki ostanejo na vaši strojni opremi ali v vašem omrežju.</div>
+
+<p>Nastavitve so v datoteki <code>local/nastavitve.env</code> v mapi aplikacije. Po vsaki spremembi aplikacijo znova zaženite (Windows: ponovno zaženite <code>zazeni.bat</code> ali opravilo »Dom Obroki«; Linux: <code>sudo systemctl restart dom-obroki</code>).</p>
+
+<h2>2. Samo na tem računalniku</h2>
+<pre><code>HOST=127.0.0.1
+PORT=8080</code></pre>
+<p>Aplikacija sprejema le povezave z istega računalnika (<b>http://localhost:8080</b>). Drugi računalniki je ne vidijo, tudi če požarni zid ni nastavljen. To je tudi pravilna nastavitev, ko pred aplikacijo stoji Caddy (poglavji 5 in 6).</p>
+
+<h2>3. Samo v lokalnem omrežju in v domeni</h2>
+<h3>3.1 Strežnik</h3>
+<ol>
+  <li>Računalnik/strežnik naj ima <b>stalen IP naslov</b> (statičen ali rezervacija v DHCP), npr. <code>192.168.10.20</code>.</li>
+  <li>V <code>nastavitve.env</code>:
+<pre><code>HOST=0.0.0.0
+PORT=8080</code></pre></li>
+  <li>Odprite vrata <b>le za lokalno omrežje</b>.
+    <p><b>Windows</b> (PowerShell kot skrbnik) – <code>LocalSubnet</code> pomeni samo omrežje, v katerem je strežnik:</p>
+<pre><code>New-NetFirewallRule -DisplayName "Dom Obroki" -Direction Inbound -Protocol TCP -LocalPort 8080 `
+  -RemoteAddress LocalSubnet -Profile Domain,Private -Action Allow</code></pre>
+    <p>Če so v domu ločena omrežja (npr. žično za zaposlene in brezžično), namesto <code>LocalSubnet</code> naštejte omrežja: <code>-RemoteAddress 192.168.10.0/24,192.168.20.0/24</code>. Pravilo lahko za več strežnikov razdelite tudi s skupinskim pravilnikom (GPO → Windows Defender Firewall).</p>
+    <p><b>Linux</b> (ufw):</p>
+<pre><code>sudo ufw allow from 192.168.10.0/24 to any port 8080 proto tcp
+sudo ufw allow OpenSSH
+sudo ufw enable</code></pre></li>
+  <li>Na usmerjevalniku/požarnem zidu proti internetu vrat 8080 <b>ne</b> preusmerjajte – tako aplikacija od zunaj ni dosegljiva.</li>
+</ol>
+
+<h3>3.2 Ime v domeni (DNS)</h3>
+<p>Da uporabnikom ni treba pomniti IP naslova, v DNS strežniku domene (Active Directory) dodajte zapis A, npr. <code>obroki.dom.local</code>:</p>
+<ul>
+  <li><b>DNS Manager</b> → Forward Lookup Zones → vaša cona → desni klik <i>New Host (A or AAAA)</i> → ime <code>obroki</code>, IP strežnika; ali</li>
+  <li>PowerShell na domenskem krmilniku:
+<pre><code>Add-DnsServerResourceRecordA -ZoneName "dom.local" -Name "obroki" -IPv4Address 192.168.10.20</code></pre></li>
+</ul>
+<p>Uporabniki odprejo <b>http://obroki.dom.local:8080</b>. Povezavo lahko vsem razdelite s skupinskim pravilnikom (bližnjica na namizju ali zaznamek brskalnika).</p>
+<div class="opomba"><b>Naprave, ki niso v domeni</b> (osebni telefoni na šolskem Wi-Fi, gostujoči računalniki), ime <code>obroki.dom.local</code> razrešijo le, če jim DHCP kot DNS strežnik dodeli domenski DNS. Sicer naj uporabijo IP naslov (<code>http://192.168.10.20:8080</code>) – ali pa dodajte omrežje Wi-Fi v pravilo požarnega zidu in DNS, oziroma tega omrežja namenoma ne dodajte, če naprave izven domene ne smejo dostopati.</div>
+
+<h3>3.3 Brez vrat v naslovu in s šifriranjem (priporočeno)</h3>
+<p>Na običajnem HTTP gredo gesla po omrežju nešifrirana. Bolje je, da pred aplikacijo postavite <b>Caddy</b> (poglavje 5) in ostane <code>HOST=127.0.0.1</code>. Za ime, ki obstaja samo v domeni (<code>.local</code>), Caddy uporabi lasten certifikat:</p>
+<pre><code>obroki.dom.local {
+	tls internal
+	reverse_proxy 127.0.0.1:8080
+}</code></pre>
+<p>Korensko potrdilo Caddy (Linux: <code>/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt</code>) razdelite računalnikom v domeni z GPO (<i>Computer Configuration → Policies → Windows Settings → Security Settings → Public Key Policies → Trusted Root Certification Authorities</i>), sicer brskalnik opozarja. Če ima domena svoj CA (AD CS), lahko certifikat izda ta. V požarnem zidu nato namesto 8080 dovolite vrata 443 (in 80).</p>
+
+<h2>4. V domeni in tudi od zunaj</h2>
+<p>Za zaposlene, ki dostopajo tudi od doma, je najvarnejši <b>VPN</b>: aplikacija ostane nastavljena kot v poglavju 3 in ni vidna na internetu, uporabnik pa se od zunaj najprej poveže v omrežje doma.</p>
+<ul>
+  <li>Če dom že ima VPN (požarni zid z SSL VPN / IPsec, Windows RRAS ali Always On VPN), dodajte VPN omrežje v pravilo požarnega zidu iz 3.1 (npr. <code>-RemoteAddress LocalSubnet,10.8.0.0/24</code>) in DNS strežnik domene v nastavitve VPN.</li>
+  <li>Sicer je preprosta rešitev <b>WireGuard</b> na usmerjevalniku ali na strežniku (odprta so samo vrata UDP 51820, odjemalci za Windows, macOS, Android, iOS).</li>
+</ul>
+<p>Če želite, da aplikacijo uporabljajo tudi <b>dijaki s svojimi telefoni</b>, VPN ni praktičen – aplikacijo objavite na internetu (poglavje 5 ali 6).</p>
+
+<h2>5. Objava na internetu (lastni strežnik)</h2>
+<h3>5.1 Kaj potrebujete</h3>
+<ul>
+  <li>Strežnik z <b>Linuxom</b> (priporočeno Ubuntu LTS) s stalnim delovanjem; aplikacija nameščena po <i>Kakoinstaliram.pdf</i>, poglavje 2.</li>
+  <li><b>Javni IP naslov</b>: strežnik je neposredno na internetu, ali pa na usmerjevalniku/požarnem zidu doma <b>preusmerite vrata TCP 80 in 443</b> na notranji IP strežnika (port forwarding / NAT).</li>
+  <li><b>Ime v DNS</b>, npr. <code>obroki.vas-dom.si</code>: pri upravitelju vaše domene (pogosto Arnes ali ponudnik gostovanja) dodajte zapis <b>A</b> z javnim IPv4 (in <b>AAAA</b> z IPv6, če ga imate).</li>
+</ul>
+
+<h3>5.2 Caddy – samodejni HTTPS</h3>
+<p>Caddy sprejema povezave z interneta, sam pridobi in obnavlja brezplačen certifikat Let's Encrypt in jih posreduje aplikaciji. Aplikacija ostane na <code>HOST=127.0.0.1</code>, zato ni neposredno dosegljiva.</p>
+<pre><code>sudo apt install -y caddy
+sudo cp /opt/dom-obroki/local/Caddyfile.primer /etc/caddy/Caddyfile
+sudo nano /etc/caddy/Caddyfile          # vpišite svoje ime namesto obroki.vas-dom.si
+sudo systemctl reload caddy</code></pre>
+<p>Vsebina <code>Caddyfile</code>:</p>
+<pre><code>obroki.vas-dom.si {
+	encode gzip
+	reverse_proxy 127.0.0.1:8080
+}</code></pre>
+<p>Po nekaj sekundah je aplikacija dosegljiva na <b>https://obroki.vas-dom.si</b>. Za pridobitev certifikata morata biti vrata 80 in 443 dosegljiva z interneta in DNS zapis mora že kazati na strežnik. Dnevnik: <code>journalctl -u caddy -f</code>. (Če paketa <code>caddy</code> v vaši distribuciji ni, sledite navodilom na <code>caddyserver.com/docs/install</code>.)</p>
+
+<h3>5.3 Požarni zid in utrditev strežnika</h3>
+<pre><code>sudo ufw default deny incoming
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow from 192.168.10.0/24 to any port 22 proto tcp   # SSH le iz notranjega omrežja / VPN
+sudo ufw enable
+sudo apt install -y unattended-upgrades fail2ban                # samodejne varnostne posodobitve, zaščita SSH</code></pre>
+<ul>
+  <li>Vrata 8080 in 5432 (PostgreSQL) naj <b>ne bodo</b> odprta navzven.</li>
+  <li>SSH: prijava s ključi, onemogočena prijava z geslom in za <code>root</code> (<code>PasswordAuthentication no</code>, <code>PermitRootLogin no</code> v <code>/etc/ssh/sshd_config</code>).</li>
+  <li>Močna gesla za vse račune v aplikaciji; računi odšlih zaposlenih naj bodo zaklenjeni.</li>
+  <li>Dnevne varnostne kopije baze (Kakoinstaliram.pdf, poglavje 4) in njihova kopija <b>izven strežnika</b>.</li>
+  <li>Aplikacija hrani osebne podatke mladoletnih – obseg obdelave in hrambe uskladite s pooblaščeno osebo za varstvo osebnih podatkov.</li>
+</ul>
+
+<h3>5.4 Windows strežnik</h3>
+<p>Na Windows je postopek enak: Caddy prenesete s <code>caddyserver.com/download</code> (datoteka <code>caddy.exe</code>), Caddyfile postavite v isto mapo in ga zaženete kot opravilo ob zagonu (tako kot aplikacijo v Kakoinstaliram.pdf, korak 7, z argumentom <code>run --config C:\Caddy\Caddyfile</code>). V požarnem zidu odprite 80 in 443. Za javni strežnik priporočamo Linux.</p>
+
+<h2 class="nova-stran">6. Namestitev na Arnesov strežnik (»Strežnik po meri«)</h2>
+<p>Arnes članicam (šolam, domovom …) nudi storitev <b>Strežnik po meri (SPM)</b> – virtualni strežnik v Arnesovem podatkovnem centru z javnim IPv4 in IPv6 naslovom. Arnes zagotovi strojne vire in omrežje; <b>namestitev, vzdrževanje, varnost in varnostne kopije so v pristojnosti vašega skrbnika.</b> Pogoje uporabe preverite pri Arnesu.</p>
+
+<h3>6.1 Pridobitev dostopa</h3>
+<ol>
+  <li>Skrbnik potrebuje <b>AAI račun</b> (ArnesAAI) zavoda.</li>
+  <li><b>Odgovorna oseba</b> zavoda (ravnatelj) ali njen pooblaščenec se prijavi v <b>Portal članic</b> (<code>portal.arnes.si</code>) z AAI računom.</li>
+  <li>Izbere <b>Naročanje storitev → Strežnik po meri</b>, v polju <i>Članica</i> izbere zavod, pod <b>Dodaj pooblaščenca</b> vpiše e-naslov skrbnika in klikne <b>Pošlji vabilo</b>.</li>
+  <li>Skrbnik prejme e-pošto, se prijavi z AAI računom in klikne <b>Potrdi povabilo</b>.</li>
+  <li>Zavodi, ki niso v federaciji ArnesAAI, izpolnijo prijavnico za Strežnik po meri (na spletni strani Arnesa) in jo pošljejo na <b>helpdesk@arnes.si</b>; skrbnik v tem primeru potrebuje gostujoči AAI račun.</li>
+</ol>
+<p>Začetna kvota je <b>2 vCPU, 4 GB RAM, 40 GB diska</b> in povezava 1 Gb/s (IPv4 in IPv6) – za Dom Obroki povsem dovolj. Več virov lahko zaprosite na helpdesk@arnes.si.</p>
+
+<h3>6.2 Ustvarjanje virtualnega strežnika</h3>
+<ol>
+  <li>Prijava v portal <b>spm.arnes.si</b> z AAI računom.</li>
+  <li><b>Nov virtualni strežnik</b> → izberite kvoto → predlogo z operacijskim sistemom (priporočamo aktualno <b>Ubuntu LTS</b>; če je ni, AlmaLinux/Rocky ali prazno predlogo z namestitvijo iz ISO) → paket virov in velikost diska.</li>
+  <li>Določite uporabniško ime in geslo (oz. SSH ključ) za prijavo. <b>Arnes jih ne more obnoviti</b> – shranite jih na varno.</li>
+  <li>Kliknite <b>Ustvari</b>. Strežnik dobi IPv4 naslov prek DHCP in ime oblike <code>xxx.ablak.arnes.si</code> (vidno v portalu).</li>
+  <li>IPv6 nastavite ročno po navodilih Arnesa: prehod <code>2001:1470:8000:400::1</code>, naslov se ujema s številko imena – npr. <code>555.ablak.arnes.si</code> = <code>2001:1470:8000:400::555</code>.</li>
+</ol>
+
+<h3>6.3 Namestitev aplikacije</h3>
+<ol>
+  <li>Prijavite se: <code>ssh uporabnik@xxx.ablak.arnes.si</code> (Windows: PowerShell ali PuTTY).</li>
+  <li>Posodobite sistem: <code>sudo apt update &amp;&amp; sudo apt full-upgrade -y</code> (Alma/Rocky: <code>sudo dnf upgrade -y</code>).</li>
+  <li>Namestite Node.js, PostgreSQL, bazo in aplikacijo po <b>Kakoinstaliram.pdf, poglavje 2</b> (datoteke prenesete na strežnik z <code>scp</code> ali WinSCP, ali z <code>git clone</code>). <code>HOST=127.0.0.1</code> pustite.</li>
+  <li><b>DNS:</b> pri upravitelju domene zavoda dodajte zapis <b>CNAME</b> <code>obroki.vas-dom.si → xxx.ablak.arnes.si</code> (ali A/AAAA z IP naslovoma strežnika). Lahko pa uporabite kar ime <code>xxx.ablak.arnes.si</code>.</li>
+  <li>Namestite <b>Caddy</b> in v <code>Caddyfile</code> vpišite izbrano ime (poglavje 5.2).</li>
+  <li>Požarni zid in utrditev po poglavju 5.3 (Alma/Rocky: <code>firewalld</code> – <code>sudo firewall-cmd --permanent --add-service=http --add-service=https &amp;&amp; sudo firewall-cmd --reload</code>). SSH omejite na IP naslove doma, če je mogoče.</li>
+  <li>Varnostne kopije (Kakoinstaliram.pdf, poglavje 4) redno prenašajte <b>z</b> strežnika, npr. v Arnes Shrambo ali na disk v domu.</li>
+  <li>Preizkus: <b>https://obroki.vas-dom.si</b>, prijava z administratorjem, ustvarjenim z <code>npm run admin</code>.</li>
+</ol>
+
+<h3>6.4 Arnesove varnostne smernice (povzetek)</h3>
+<ul>
+  <li>redne posodobitve sistema; odstranite pakete, ki jih ne potrebujete,</li>
+  <li>močna gesla, onemogočena neposredna prijava <code>root</code>, prijava s SSH ključi,</li>
+  <li>požarni zid (ufw / firewalld), zaprta vsa vrata, ki jih ne uporabljate,</li>
+  <li>redne varnostne kopije na drugo lokacijo.</li>
+</ul>
+
+<h3>6.5 Kontakti in viri Arnes</h3>
+<table>
+  <tr><td>Podpora</td><td>helpdesk@arnes.si · 01 479 88 77</td></tr>
+  <tr><td>Splošno</td><td>arnes@arnes.si</td></tr>
+  <tr><td>Opis storitve</td><td>podpora.arnes.si/streznik-po-meri</td></tr>
+  <tr><td>Naročilo</td><td>podpora.arnes.si/narocilo-streznik-po-meri</td></tr>
+  <tr><td>Ustvarjanje strežnika</td><td>podpora.arnes.si/kreiranje-novega-virtualnega-streznika-iz-ze-namescene-predloge</td></tr>
+  <tr><td>Varnost strežnika</td><td>podpora.arnes.si/smernice-varnosti-streznika-linux-os</td></tr>
+  <tr><td>Portala</td><td>portal.arnes.si (naročanje) · spm.arnes.si (upravljanje strežnikov)</td></tr>
+</table>
+<div class="opomba">Arnesovo običajno spletno gostovanje (za spletne strani šol) Node.js aplikacij ne poganja – potrebujete »Strežnik po meri«.</div>
+
+</body>
+</html>
