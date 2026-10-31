@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2, DoorOpen, FileText } from 'lucide-react';
+import { Plus, Upload, Search, Leaf, History, KeyRound, Lock, Unlock, CalendarOff, CalendarClock, Trash2, DoorOpen, FileText, Download } from 'lucide-react';
 import { api } from './api.js';
-import { readXlsx, excelDate } from './xlsx.js';
-import { DETAIL_FIELDS, LEGACY_DETAILS, detailColumns, rowDetails } from './details.js';
+import { readXlsx, excelDate, writeXlsx } from './xlsx.js';
+import { DETAIL_FIELDS, LEGACY_DETAILS, SAMPLE_COLUMNS, detailColumns, rowDetails } from './details.js';
 import Modal from './Modal.jsx';
 import IzpisnicaForm from './Izpisnica.jsx';
 import OsebniListForm from './OsebniList.jsx';
-import { loginSlipsPdf, openPdf, pdfTab } from './pdf.js';
+import { loginSlipsPdf, openPdf, pdfTab, downloadBlob } from './pdf.js';
 import { MEALS, MEAL_NAMES, VARIANTS, VARIANT_LABEL, VARIANT_SHORT, WEEKDAYS, DEF_COL, ROLE_NAME, fmtDay, studentName, plural } from './meals.js';
 
 const EMPTY = { first_name: '', last_name: '', group_name: '', room: '', diet: '', diet_reason: '', notes: '', def_b: 'normal', def_l: 'normal', def_d: 'normal', weekly: {}, active: true };
@@ -393,6 +393,29 @@ const IMPORT_FIELDS = [
   ['left', 'Izstop (datum)', h => h === 'izstop'],
   ['ext_id', 'Zap. št. dijaka', h => h.startsWith('zap')],
 ];
+// An empty sheet in the format the import reads: the header row, one example student and a sheet with instructions
+function sampleXlsx() {
+  const base = [['Zap. št. dijaka', 101], ['Priimek', 'Novak'], ['Ime', 'Ana'], ['Vzgojna skupina', '1. skupina'],
+    ['Soba', '104'], ['Posebna dieta', ''], ['Izstop', '']];
+  const cols = [...base, ...SAMPLE_COLUMNS.map(([, head, example]) => [head, example])];
+  const help = [
+    [{ v: 'Kako izpolniti preglednico za uvoz dijakov', bold: true }],
+    [],
+    ['• En dijak v eni vrstici, od 2. vrstice naprej. Vrstico s primerom (Ana Novak) pred uvozom izbrišite.'],
+    ['• Obvezna sta samo Priimek in Ime. Vsi drugi stolpci so lahko prazni ali jih izbrišete.'],
+    ['• Imen stolpcev v 1. vrstici ne spreminjajte, ker se po njih prepozna, kaj je v stolpcu. Vrstni red ni pomemben.'],
+    ['• Zap. št. dijaka poveže vrstico z dijakom ob ponovnem uvozu: obstoječi dijak se posodobi, namesto da bi se dodal še enkrat.'],
+    ['• Vzgojna skupina naj bo zapisana enako kot v aplikaciji, npr. »1. skupina«.'],
+    ['• Datume (Sprejem, Izstop, Rojstni datum …) vpišite kot datum, npr. 1. 9. 2026.'],
+    ['• Dijak z datumom izstopa, ki je že mimo, se ob uvozu izseli.'],
+    ['• Kontakte in ostale podatke vidijo samo vzgojitelji, ravnatelj in administrator.'],
+  ];
+  return writeXlsx([
+    { name: 'Dijaki', rows: [cols.map(([h]) => ({ v: h, bold: true })), cols.map(([, v]) => v)], widths: cols.map(([h]) => Math.max(12, h.length + 4)), freeze: 1 },
+    { name: 'Navodila', rows: help, widths: [110] },
+  ]);
+}
+
 const normHead = v => String(v).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 
 // The header row is the first one (of the top 20) that has a "priimek" column
@@ -489,10 +512,16 @@ function ImportDialog({ me, onClose, onDone }) {
           <>
             <p className="hint">Izberite preglednico dijakov (.xlsx). Prebere se prvi list. Poleg osnovnih podatkov se prenesejo tudi kontakti
               (naslovi, telefoni, e-naslovi dijaka in staršev) in vsi ostali stolpci; vidijo jih le vzgojitelji, ravnatelj in skrbnik.</p>
-            <label className="file-pick">
-              <Upload size={16} /> {sheet ? sheet.name : 'Izberi datoteko .xlsx'}
-              <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={pick} />
-            </label>
+            <div className="file-row">
+              <label className="file-pick">
+                <Upload size={16} /> {sheet ? sheet.name : 'Izberi datoteko .xlsx'}
+                <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={pick} />
+              </label>
+              <button type="button" className="btn ghost small" onClick={() => downloadBlob(sampleXlsx(), 'vzorec-uvoz-dijakov.xlsx')}
+                title="Prazna preglednica s pravimi stolpci in navodili – izpolnite jo in uvozite">
+                <Download size={14} /> Vzorčna datoteka
+              </button>
+            </div>
             {sheet && (
               <fieldset className="perm-field import-cols">
                 <legend>Stolpci <small>prepoznani samodejno, po potrebi popravite</small></legend>

@@ -48,6 +48,25 @@ export const DETAIL_FIELDS = [
   ['father_tax_no', 'Davčna št. – oče', 'other', 'Starši', h => h === 'ds oce', 'tax'],
 ];
 
+// Column headers of the sample import sheet (each one is recognised by the matcher above) and an example value
+export const SAMPLE_COLUMNS = [
+  ['address', 'Stalni naslov', 'Glavna ulica 12'], ['post_code', 'Poštna številka', '2000'], ['post', 'Pošta', 'Maribor'],
+  ['municipality', 'Občina', 'Maribor'], ['temp_address', 'Začasni naslov', 'Vrbanska cesta 30, 2000 Maribor'],
+  ['email', 'E-naslov', 'ana.novak@primer.si'], ['phone', 'Mobitel', '041 123 456'],
+  ['mother_first', 'Ime mati', 'Marija'], ['mother_last', 'Priimek mati', 'Novak'], ['mother_address', 'Naslov mati', 'Glavna ulica 12, 2000 Maribor'],
+  ['mother_email', 'E-naslov mati', 'marija.novak@primer.si'], ['mother_phone', 'Mobitel mati', '031 234 567'],
+  ['father_first', 'Ime oče', 'Janez'], ['father_last', 'Priimek oče', 'Novak'], ['father_address', 'Naslov oče', 'Glavna ulica 12, 2000 Maribor'],
+  ['father_email', 'E-naslov oče', 'janez.novak@primer.si'], ['father_phone', 'Mobitel oče', '040 345 678'],
+  ['contract_no', 'Št. pogodbe', '123/2026'], ['contract_date', 'Datum sklenitve pogodbe', { date: '2026-08-25' }],
+  ['enrol_cert', 'Potrdilo o vpisu', 'da'], ['vs_new', 'VS novo', ''], ['admitted', 'Sprejem', { date: '2026-09-01' }],
+  ['left_reason', 'Razlog izstopa', ''], ['subsidy', 'Subvencija', 'ne'],
+  ['birth_date', 'Rojstni datum', { date: '2010-05-14' }], ['birth_place', 'Rojstni kraj', 'Maribor'], ['birth_country', 'Rojstna država', 'Slovenija'],
+  ['sex', 'Spol', 'Ž'], ['citizenship', 'Državljanstvo', 'slovensko'], ['emso', 'EMŠO', '1405010505123'], ['tax_no', 'Davčna številka', '12345678'],
+  ['parish', 'Matična župnija', 'Maribor – sv. Janez Krstnik'], ['prior_edu', 'Predhodno pridobljena izobrazba', 'osnovna šola'],
+  ['school', 'Šola', 'II. gimnazija Maribor'], ['program', 'Program', 'gimnazija'], ['class', 'Razred', '1. a'],
+  ['mother_emso', 'EMŠO mati', ''], ['mother_tax_no', 'DŠ mati', ''], ['father_emso', 'EMŠO oče', ''], ['father_tax_no', 'DŠ oče', ''],
+];
+
 // A register column with a parent's full name ("Mati", "Oče") is split into the first/last name fields
 const FULL_NAME_HEADS = { mati: 'mother', oce: 'father' };
 export const LEGACY_DETAILS = Object.values(FULL_NAME_HEADS);
