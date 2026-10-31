@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import { hashPassword, verifyPassword, signToken, verifyToken } from './auth.mjs';
 import {
   MEALS, VARIANTS, MENU_VARIANTS, DEF_COL, validVariant, defaultVariant, mealServed, addDays, isDate, isoDow, localNow, firstEditableDay,
+  REASON_MIN_WORDS, reasonWords,
 } from './rules.mjs';
 
 const CORS = {
@@ -36,6 +37,7 @@ const RIGHTS = {
   viewMenu: ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office'],
   report: ['admin', 'principal', 'dietitian', 'office'],       // monthly overview of all orders, Excel export
   attendance: ['admin', 'principal', 'teacher', 'guard'],      // evening attendance sheet
+  ratings: ['admin', 'principal'],                             // students' meal ratings; others get it as an extra right
 };
 // Who may tick which attendance column (see the attendance table)
 const SLOT_ROLES = {
@@ -50,7 +52,7 @@ const REPORT_ROLES = ['admin', 'principal', 'guard'];
 // The guard's shift runs past midnight, so records can be written for the last few evenings too
 const REPORT_DAYS_BACK = 3;
 // Rights that can be granted to a single staff account on top of its role
-const EXTRA_RIGHTS = ['orders', 'menu', 'mealSettings', 'report'];
+const EXTRA_RIGHTS = ['orders', 'menu', 'mealSettings', 'report', 'ratings'];
 const STAFF_ROLES = ['admin', 'principal', 'teacher', 'dietitian', 'kitchen', 'office', 'guard'];
 
 class HttpError extends Error {
@@ -575,6 +577,27 @@ async function menuRows(from, to) {
   return rows;
 }
 
+// ---------------------------------------------------------------- meal ratings
+
+// How many days back a student may still rate a meal
+const RATE_DAYS_BACK = 7;
+// Photos are resized in the browser; this only stops oversized uploads
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+const PHOTO_MAGIC = { 'image/jpeg': [0xff, 0xd8, 0xff], 'image/png': [0x89, 0x50, 0x4e, 0x47], 'image/webp': [0x52, 0x49, 0x46, 0x46] };
+
+// On unless the administrator switched it off
+const ratingsAnonymous = ck => ck.settings.ratings_anonymous !== '';
+
+// data:image/...;base64,... -> { buf, type }; only real JPEG, PNG or WEBP images
+function parsePhoto(dataUrl) {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl));
+  if (!m) throw new HttpError(400, 'Fotografija mora biti slika JPG, PNG ali WEBP');
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > MAX_PHOTO_BYTES) throw new HttpError(400, 'Fotografija je prevelika (največ 2 MB)');
+  if (!PHOTO_MAGIC[m[1]].every((x, i) => buf[i] === x)) throw new HttpError(400, 'Datoteka ni veljavna slika');
+  return { buf, type: m[1] };
+}
+
 // ---------------------------------------------------------------- actions
 
 function parseJson(text, fallback) {
@@ -894,6 +917,10 @@ const actions = {
       menu: await menuRows(days[0], days[4]),
       closed: await closedSet(days[0], days[4]),
       absences: await absencesOf(user.student_id, addDays(ck.today, -14)),
+      ratings: (await db.query(`
+        select day, meal::text as meal, score, reason, photo is not null as has_photo, anonymous
+        from meal_ratings where student_id = $1 and day between $2 and $3`, [user.student_id, days[0], days[4]])).rows,
+      rating: { from: addDays(ck.today, -RATE_DAYS_BACK), anonymous: ratingsAnonymous(ck), minWords: REASON_MIN_WORDS },
       clock: publicClock(ck),
     };
   },
@@ -1187,6 +1214,95 @@ const actions = {
     return { weeks: targets.length };
   },
 
+  // ------------------------------------------------ meal ratings
+
+  // { day, meal, score 1–5, reason, photo?: data URL, removePhoto? } — a meal the student had, up to RATE_DAYS_BACK days back.
+  // Rating the same meal again replaces the earlier rating.
+  async myRate(b, user, ck) {
+    requireStudent(user);
+    if (!isDate(b.day) || !MEALS.includes(b.meal) || !mealServed(b.day, b.meal)) throw new HttpError(400, 'Neveljaven obrok');
+    if (b.day > ck.today) throw new HttpError(400, 'Oceniš lahko samo obrok, ki je že bil');
+    if (b.day < addDays(ck.today, -RATE_DAYS_BACK)) throw new HttpError(400, `Obrok lahko oceniš največ ${RATE_DAYS_BACK} dni nazaj`);
+    const score = Number(b.score);
+    if (!Number.isInteger(score) || score < 1 || score > 5) throw new HttpError(400, 'Izberi oceno od 1 do 5');
+    const reason = String(b.reason || '').trim().slice(0, 2000);
+    if (reasonWords(reason) < REASON_MIN_WORDS) {
+      throw new HttpError(400, `Utemeljitev mora vsebovati vsaj ${REASON_MIN_WORDS} različnih besed z vsaj 3 črkami`);
+    }
+    const db = getPool();
+    const { rows: closed } = await db.query('select 1 from closed_days where day = $1', [b.day]);
+    if (closed.length) throw new HttpError(400, 'Ta dan je bila kuhinja zaprta');
+    const { rows: ord } = await db.query('select variant from orders where student_id = $1 and day = $2 and meal = $3', [user.student_id, b.day, b.meal]);
+    const variant = ord[0]?.variant || 'none';
+    if (variant === 'none') throw new HttpError(400, 'Oceniš lahko samo obrok, na katerega si bil prijavljen');
+    const { rows: menu } = await db.query('select dish from menus where day = $1 and meal = $2 and variant = $3',
+      [b.day, b.meal, variant.replace(/^late_/, '')]);
+    const photo = b.photo ? parsePhoto(b.photo) : null;
+    await db.query(`
+      insert into meal_ratings (student_id, day, meal, variant, dish, score, reason, photo, photo_type, anonymous)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      on conflict (student_id, day, meal) do update set
+        variant = excluded.variant, dish = excluded.dish, score = excluded.score, reason = excluded.reason,
+        photo = case when excluded.photo is not null then excluded.photo when $11 then null else meal_ratings.photo end,
+        photo_type = case when excluded.photo is not null then excluded.photo_type when $11 then '' else meal_ratings.photo_type end,
+        anonymous = excluded.anonymous, updated_at = now()`,
+      [user.student_id, b.day, b.meal, variant, menu[0]?.dish || '', score, reason, photo?.buf || null, photo?.type || '',
+        ratingsAnonymous(ck), !!b.removePhoto]);
+    return { ok: true };
+  },
+
+  async myDeleteRating(b, user, ck) {
+    requireStudent(user);
+    if (!isDate(b.day) || b.day < addDays(ck.today, -RATE_DAYS_BACK)) throw new HttpError(400, 'Te ocene ni več mogoče umakniti');
+    await getPool().query('delete from meal_ratings where student_id = $1 and day = $2 and meal = $3', [user.student_id, b.day, b.meal]);
+    return { ok: true };
+  },
+
+  // { from, to, meal? } — the author is shown only for ratings given while ratings were not anonymous
+  async ratings(b, user, ck) {
+    requireRight(user, 'ratings');
+    daysBetween(b.from, b.to);
+    const params = [b.from, b.to];
+    let where = 'r.day between $1 and $2';
+    if (MEALS.includes(b.meal)) { params.push(b.meal); where += ' and r.meal = $3'; }
+    const { rows } = await getPool().query(`
+      select r.id, r.day, r.meal::text as meal, r.variant, r.dish, r.score, r.reason, r.photo is not null as has_photo,
+        r.anonymous, r.created_at, r.updated_at,
+        case when r.anonymous then null else s.first_name || ' ' || s.last_name end as student_name,
+        case when r.anonymous then null else s.group_name end as group_name
+      from meal_ratings r join students s on s.id = r.student_id
+      where ${where}
+      order by r.day desc, array_position(array['B', 'L', 'D'], r.meal::text), r.created_at desc`, params);
+    return { ratings: rows, anonymous: ratingsAnonymous(ck), canDelete: can(user, 'users') };
+  },
+
+  // { id } for staff with the ratings right, { day, meal } for a student's own rating
+  async ratingPhoto(b, user) {
+    if (user?.role === 'student') requireStudent(user); else requireRight(user, 'ratings');
+    const { rows } = user.role === 'student'
+      ? await getPool().query('select photo, photo_type from meal_ratings where student_id = $1 and day = $2 and meal = $3',
+        [user.student_id, isDate(b.day) ? b.day : null, String(b.meal || '')])
+      : await getPool().query('select photo, photo_type from meal_ratings where id = $1', [Number(b.id) || 0]);
+    if (!rows[0]?.photo) throw new HttpError(400, 'Fotografije ni');
+    return { photo: `data:${rows[0].photo_type};base64,${rows[0].photo.toString('base64')}` };
+  },
+
+  // Removing an offensive rating or photo is for the administrator and principal
+  async deleteRating(b, user) {
+    requireRight(user, 'users');
+    const { rows } = await getPool().query('delete from meal_ratings where id = $1 returning day, meal::text as meal, score', [Number(b.id) || 0]);
+    if (!rows[0]) throw new HttpError(400, 'Ocene ni mogoče najti');
+    await audit(user, 'rating.delete', `${rows[0].day} ${rows[0].meal}, ocena ${rows[0].score}`);
+    return { ok: true };
+  },
+
+  async saveRatingSettings(b, user) {
+    requireRight(user, 'system');
+    await setSetting('ratings_anonymous', b.anonymous ? '1' : '');
+    await audit(user, 'settings.ratings', b.anonymous ? 'ocene obrokov so anonimne' : 'pri ocenah obrokov je viden dijak');
+    return { ok: true };
+  },
+
   // ------------------------------------------------ accounts
 
   async users(b, user) {
@@ -1273,6 +1389,7 @@ const actions = {
       timezone: ck.timezone, cutoff_hour: ck.cutoffHour, closed,
       school_year_start: yearStart(ck), school_year_end: yearEnd(ck),
       student_choices: studentChoices(ck), meal_times: mealTimes(ck), student_can_cancel: studentCanCancel(ck),
+      ratings_anonymous: ratingsAnonymous(ck),
     };
   },
 

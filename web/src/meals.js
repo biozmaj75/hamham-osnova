@@ -124,3 +124,14 @@ export function studentName(s) { return `${s.last_name} ${s.first_name}`; }
 export const ROLE_NAME = {
   admin: 'Skrbnik', principal: 'Ravnatelj', teacher: 'Vzgojitelj', dietitian: 'Organizator prehrane', kitchen: 'Kuhinja', office: 'Tajništvo', guard: 'Nočni varnostnik', student: 'Dijak',
 };
+
+// Meal ratings (mirror of the server rule): 1 = very bad … 5 = excellent
+export const SCORE_LABEL = { 1: 'zelo slab', 2: 'slab', 3: 'povprečen', 4: 'dober', 5: 'odličen' };
+
+// Different words of 3 or more letters in a rating's reason
+export function reasonWords(text) {
+  const words = String(text || '').toLowerCase().split(/\s+/)
+    .map(w => w.replace(/[^\p{L}]/gu, ''))
+    .filter(w => w.length >= 3);
+  return new Set(words).size;
+}

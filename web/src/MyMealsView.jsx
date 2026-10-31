@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Lock, CalendarOff, Trash2, Plus, Leaf, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, CalendarOff, Trash2, Plus, Leaf, Clock, Star } from 'lucide-react';
 import { api } from './api.js';
+import RateMeal from './RateMeal.jsx';
 import {
   MEALS, MEAL_NAMES, VARIANT_LABEL, VARIANT_SHORT, addDays, startWeek, mondayOf, mealServed, fmtDay, fmtLong, capitalize, dishFor,
 } from './meals.js';
@@ -15,6 +16,7 @@ export default function MyMealsView({ me }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [toast, setToast] = useState(null);
+  const [rating, setRating] = useState(null);
 
   const load = () => api('myWeek', { from }).then(setData).catch(err => setError(err.message));
   useEffect(() => { setData(null); setError(''); load(); }, [from]);
@@ -39,6 +41,7 @@ export default function MyMealsView({ me }) {
   const order = (day, meal) => data?.orders.find(o => o.day === day && o.meal === meal);
   const closed = day => data?.closed.find(c => c.day === day);
   const away = day => data?.absences.find(a => a.day_from <= day && day <= a.day_to);
+  const ratingOf = (day, meal) => data?.ratings.find(r => r.day === day && r.meal === meal);
   const st = me.student || {};
 
   return (
@@ -103,6 +106,14 @@ export default function MyMealsView({ me }) {
                       {(locked || c || a || (!me.canCancel && v === 'none')) && <span className="my-choice">{a && v === 'none' ? 'Odsoten' : VARIANT_LABEL[v]}</span>}
                       {dish && <p className="my-dish">{dish}</p>}
                       {note && me.times[note] && <p className="my-note">{note === 'dry' ? 'Prevzem paketa' : 'Pozni obrok'}: {me.times[note]}</p>}
+                      {!c && v !== 'none' && day <= clock.today && day >= data.rating.from && (() => {
+                        const r = ratingOf(day, m);
+                        return (
+                          <button className={`rate-btn ${r ? `rated s${r.score}` : ''}`} onClick={() => setRating({ day, meal: m, dish, existing: r })}>
+                            <Star size={13} /> {r ? <span>Tvoja ocena <b>{r.score}</b>/5 · uredi</span> : 'Oceni obrok'}
+                          </button>
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -126,6 +137,10 @@ export default function MyMealsView({ me }) {
         </section>
       </div>
 
+      {rating && (
+        <RateMeal {...rating} rules={data.rating} onClose={() => setRating(null)}
+          onSaved={text => { setRating(null); setToast({ text }); load(); }} />
+      )}
       {toast && <div className={`toast ${toast.error ? 'bad' : ''}`} onClick={() => setToast(null)}>{toast.text}</div>}
     </div>
   );

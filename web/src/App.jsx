@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, ChefHat, Users, Settings, LogOut, KeyRound, UtensilsCrossed, ShieldCheck, Soup, FileSpreadsheet, MoonStar } from 'lucide-react';
+import { CalendarDays, ChefHat, Users, Settings, LogOut, KeyRound, UtensilsCrossed, ShieldCheck, Soup, FileSpreadsheet, MoonStar, Star } from 'lucide-react';
 import { api, session } from './api.js';
 import Login from './Login.jsx';
 import OrdersView from './OrdersView.jsx';
@@ -10,6 +10,7 @@ import MenuView from './MenuView.jsx';
 import ReportView from './ReportView.jsx';
 import MyMealsView from './MyMealsView.jsx';
 import AttendanceView from './AttendanceView.jsx';
+import RatingsView from './RatingsView.jsx';
 import PasswordDialog from './PasswordDialog.jsx';
 import { ROLE_NAME } from './meals.js';
 
@@ -17,7 +18,9 @@ import { ROLE_NAME } from './meals.js';
 const TABS = [
   { id: 'my', label: 'Moji obroki', icon: Soup, show: me => me.user.role === 'student' },
   { id: 'orders', label: 'Naročila', icon: CalendarDays, right: 'orders' },
-  { id: 'menu', label: 'Jedilnik', icon: UtensilsCrossed, show: me => me.user.role === 'student' || me.rights.includes('viewMenu') },
+  // Staff who see meal ratings get the menu and the ratings together under Prehrana
+  { id: 'menu', label: me => (me.rights.includes('ratings') ? 'Prehrana' : 'Jedilnik'), icon: UtensilsCrossed,
+    show: me => me.user.role === 'student' || me.rights.includes('viewMenu') || me.rights.includes('ratings') },
   { id: 'kitchen', label: 'Kuhinja', icon: ChefHat, right: 'kitchen' },
   { id: 'report', label: 'Mesečni pregled', icon: FileSpreadsheet, right: 'report' },
   { id: 'attendance', label: 'Prisotnost', icon: MoonStar, right: 'attendance' },
@@ -62,7 +65,7 @@ export default function App() {
         <nav className="tabs">
           {tabs.map(t => (
             <button key={t.id} className={t.id === active?.id ? 'tab on' : 'tab'} onClick={() => setTab(t.id)}>
-              <t.icon size={16} strokeWidth={2} /> {t.label}
+              <t.icon size={16} strokeWidth={2} /> {typeof t.label === 'function' ? t.label(me) : t.label}
             </button>
           ))}
         </nav>
@@ -76,7 +79,7 @@ export default function App() {
         {!active && <p className="muted pad">Vaš račun nima dostopa do nobenega dela aplikacije. Obrnite se na skrbnika.</p>}
         {active?.id === 'my' && <MyMealsView me={me} />}
         {active?.id === 'orders' && <OrdersView clock={me.clock} me={me} />}
-        {active?.id === 'menu' && <MenuView clock={me.clock} canEdit={has('menu')} />}
+        {active?.id === 'menu' && (has('ratings') ? <FoodView me={me} has={has} /> : <MenuView clock={me.clock} canEdit={has('menu')} />)}
         {active?.id === 'kitchen' && <KitchenView clock={me.clock} />}
         {active?.id === 'report' && <ReportView me={me} />}
         {active?.id === 'attendance' && <AttendanceView me={me} />}
@@ -88,5 +91,26 @@ export default function App() {
         ? <PasswordDialog forced onChanged={loadMe} onSignOut={signOut} />
         : pwOpen && <PasswordDialog onClose={() => setPwOpen(false)} />}
     </div>
+  );
+}
+
+// Prehrana: the weekly menu and the students' meal ratings
+function FoodView({ me, has }) {
+  const subs = [has('viewMenu') && ['menu', 'Jedilnik', UtensilsCrossed], ['ratings', 'Ocene obrokov', Star]].filter(Boolean);
+  const [sub, setSub] = useState(() => sessionStorage.getItem('food-tab') || subs[0][0]);
+  const cur = subs.find(x => x[0] === sub) ? sub : subs[0][0];
+  useEffect(() => { sessionStorage.setItem('food-tab', cur); }, [cur]);
+  return (
+    <>
+      {subs.length > 1 && (
+        <nav className="sub-tabs no-print">
+          {subs.map(([id, label, Icon]) => (
+            <button key={id} className={id === cur ? 'on' : ''} onClick={() => setSub(id)}><Icon size={14} /> {label}</button>
+          ))}
+        </nav>
+      )}
+      {cur === 'menu' && <MenuView clock={me.clock} canEdit={has('menu')} />}
+      {cur === 'ratings' && <RatingsView me={me} />}
+    </>
   );
 }

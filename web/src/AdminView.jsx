@@ -18,6 +18,7 @@ const ROLE_RIGHTS = {
   kitchen: ['admin', 'principal', 'teacher', 'dietitian', 'kitchen'],
   report: ['admin', 'principal', 'dietitian', 'office'],
   attendance: ['admin', 'principal', 'teacher', 'guard'],
+  ratings: ['admin', 'principal'],
 };
 
 const RIGHT_LABEL = {
@@ -31,6 +32,7 @@ const RIGHT_LABEL = {
   kitchen: 'Kuhinjski seznami in števila',
   report: 'Mesečni pregled naročil in izvoz v Excel',
   attendance: 'Prisotnost dijakov (večerna preglednica)',
+  ratings: 'Ocene obrokov dijakov (Prehrana → Ocene obrokov)',
 };
 
 const ACTION_LABEL = {
@@ -52,6 +54,8 @@ const ACTION_LABEL = {
   'menu.copy': 'Kopiranje jedilnika',
   'settings.meals': 'Nastavitve prehrane',
   'settings.system': 'Sistemske nastavitve',
+  'settings.ratings': 'Anonimnost ocen obrokov',
+  'rating.delete': 'Izbris ocene obroka',
   'closed.add': 'Zaprt dan',
   'closed.remove': 'Odprt dan',
 };
@@ -307,6 +311,7 @@ export function SettingsView({ me }) {
       </div>
       <div className="admin-side">
         {has('system') && <SystemSettings s={s} setS={setS} />}
+        {has('system') && <RatingSettings s={s} setS={setS} />}
         {has('mealSettings') && <ClosedDays closed={s.closed} reload={load} />}
       </div>
     </div>
@@ -419,6 +424,39 @@ function SystemSettings({ s, setS }) {
         <label>Časovni pas<input value={s.timezone} onChange={e => setS({ ...s, timezone: e.target.value })} /></label>
         <SaveState msg={msg} />
         <div className="form-actions"><button className="btn primary" disabled={busy}>{busy ? 'Shranjevanje …' : 'Shrani'}</button></div>
+      </form>
+    </section>
+  );
+}
+
+function RatingSettings({ s, setS }) {
+  const [msg, setMsg] = useState(null);
+
+  async function change(anonymous) {
+    setS({ ...s, ratings_anonymous: anonymous });
+    try {
+      await api('saveRatingSettings', { anonymous });
+      setMsg({ ok: true, text: 'Shranjeno.' });
+    } catch (err) {
+      setS({ ...s, ratings_anonymous: !anonymous });
+      setMsg({ ok: false, text: err.message });
+    }
+  }
+
+  return (
+    <section className="table-card pad-card">
+      <h2>Ocene obrokov</h2>
+      <form className="form" onSubmit={e => e.preventDefault()}>
+        <label className="inline-check">
+          <input type="radio" name="ratings-anon" checked={!!s.ratings_anonymous} onChange={() => change(true)} />
+          Ocene so anonimne – nihče ne vidi, kateri dijak je oddal oceno
+        </label>
+        <label className="inline-check">
+          <input type="radio" name="ratings-anon" checked={!s.ratings_anonymous} onChange={() => change(false)} />
+          Pri oceni je zapisan dijak, ki jo je oddal
+        </label>
+        <p className="hint">Dijak pred oddajo vidi, ali bo ocena anonimna. Velja za ocene, oddane od zdaj naprej – ocene, ki so bile oddane anonimno, ostanejo anonimne.</p>
+        <SaveState msg={msg} />
       </form>
     </section>
   );

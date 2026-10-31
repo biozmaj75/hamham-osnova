@@ -180,6 +180,27 @@ create table if not exists absences (
 );
 create index if not exists absences_student_idx on absences(student_id, day_to);
 
+-- Students' ratings of meals they had: 1 = very bad … 5 = excellent, with a written reason and an optional photo.
+-- dish is copied from the menu at the time of rating. anonymous is fixed when the rating is given,
+-- so switching the setting later never reveals who wrote an earlier anonymous rating.
+create table if not exists meal_ratings (
+  id serial primary key,
+  student_id int not null references students(id) on delete cascade,
+  day date not null,
+  meal char(1) not null check (meal in ('B', 'L', 'D')),
+  variant text not null,
+  dish text not null default '',
+  score int not null check (score between 1 and 5),
+  reason text not null,
+  photo bytea,
+  photo_type text not null default '',
+  anonymous boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (student_id, day, meal)
+);
+create index if not exists meal_ratings_day_idx on meal_ratings(day);
+
 -- Who changed accounts, rights, settings and student records
 create table if not exists audit_log (
   id bigserial primary key,
@@ -200,6 +221,8 @@ const DEFAULT_SETTINGS = {
   student_choices: '',
   // Serving times shown to students and the kitchen (JSON {B, L, D, late, dry})
   meal_times: '',
+  // '1' = staff never see who rated a meal (set by the administrator)
+  ratings_anonymous: '1',
 };
 
 export async function init() {

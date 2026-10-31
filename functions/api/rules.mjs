@@ -75,3 +75,13 @@ export function firstEditableDay(timeZone, cutoffHour, now = new Date()) {
   const { today, hour } = localNow(timeZone, now);
   return addDays(today, hour < cutoffHour ? 1 : 2);
 }
+
+// A meal rating needs a reason with at least this many different words of 3 or more letters
+export const REASON_MIN_WORDS = 5;
+
+export function reasonWords(text) {
+  const words = String(text || '').toLowerCase().split(/\s+/)
+    .map(w => w.replace(/[^\p{L}]/gu, ''))
+    .filter(w => w.length >= 3);
+  return new Set(words).size;
+}
