@@ -9,8 +9,10 @@ export function hashPassword(password) {
 }
 
 export function verifyPassword(password, stored) {
-  if (!stored || !stored.includes(':')) return false;
-  const [salt, hash] = stored.split(':');
+  if (typeof password !== 'string' || typeof stored !== 'string') return false;
+  const parts = stored.split(':');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+  const [salt, hash] = parts;
   const test = crypto.scryptSync(password, salt, 64);
   const expected = Buffer.from(hash, 'hex');
   return expected.length === test.length && crypto.timingSafeEqual(expected, test);
@@ -23,13 +25,15 @@ export function signToken(payload, secret) {
 }
 
 export function verifyToken(token, secret) {
-  if (!token || !token.includes('.')) return null;
-  const [body, sig] = token.split('.');
+  if (typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  const [body, sig] = parts;
   const expected = crypto.createHmac('sha256', secret).update(body).digest('base64url');
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
-    return payload.exp > Date.now() ? payload : null;
+    return payload && typeof payload === 'object' && payload.exp > Date.now() ? payload : null;
   } catch {
     return null;
   }
