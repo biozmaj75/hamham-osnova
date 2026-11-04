@@ -22,6 +22,14 @@ const TYPES = {
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
+// Security headers: defense in depth against framing/clickjacking, MIME sniffing, and sensitive feature access
+const SECURITY_HEADERS = {
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -40,7 +48,7 @@ async function api(req, res) {
   try {
     body = await readBody(req);
   } catch {
-    res.writeHead(413, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: 'Zahteva je prevelika' }));
+    res.writeHead(413, { 'Content-Type': 'application/json', ...SECURITY_HEADERS }).end(JSON.stringify({ error: 'Zahteva je prevelika' }));
     return;
   }
   const out = await handler({
@@ -55,7 +63,8 @@ async function api(req, res) {
 async function file(req, res) {
   const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   let p = path.resolve(SITE, `.${url}`);
-  if (!p.startsWith(SITE)) { res.writeHead(403).end(); return; }
+  // Strict boundary check prevents path traversal or prefix escape (e.g. /site_backup)
+  if (p !== SITE && !p.startsWith(SITE + path.sep)) { res.writeHead(403, SECURITY_HEADERS).end(); return; }
   let data;
   try {
     if ((await fs.stat(p)).isDirectory()) p = path.join(p, 'index.html');
@@ -68,7 +77,7 @@ async function file(req, res) {
   res.writeHead(200, {
     'Content-Type': TYPES[path.extname(p).toLowerCase()] || 'application/octet-stream',
     'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
-    'X-Content-Type-Options': 'nosniff',
+    ...SECURITY_HEADERS,
   });
   res.end(req.method === 'HEAD' ? undefined : data);
 }
@@ -77,10 +86,10 @@ http.createServer(async (req, res) => {
   try {
     if (req.url.startsWith('/api')) await api(req, res);
     else if (req.method === 'GET' || req.method === 'HEAD') await file(req, res);
-    else res.writeHead(405).end();
+    else res.writeHead(405, SECURITY_HEADERS).end();
   } catch (err) {
     console.error(err);
-    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS });
     res.end('Napaka na strežniku');
   }
 }).on('error', err => {
