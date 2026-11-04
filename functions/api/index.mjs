@@ -19,6 +19,14 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+// Security headers: defense in depth against framing/clickjacking, MIME sniffing, and sensitive feature access
+const SECURITY_HEADERS = {
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+
 // How far ahead default orders are created when no school year is set
 const HORIZON_DAYS = 28;
 const MAX_RANGE_DAYS = 400;
@@ -60,7 +68,7 @@ class HttpError extends Error {
 }
 
 function json(data, statusCode = 200) {
-  return { statusCode, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(data) };
+  return { statusCode, headers: { 'Content-Type': 'application/json', ...CORS, ...SECURITY_HEADERS }, body: JSON.stringify(data) };
 }
 
 // ---------------------------------------------------------------- time
@@ -1451,7 +1459,7 @@ function publicClock(ck) {
 
 export const handler = async (event) => {
   const method = event.requestContext?.http?.method || event.httpMethod || 'POST';
-  if (method === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+  if (method === 'OPTIONS') return { statusCode: 204, headers: { ...CORS, ...SECURITY_HEADERS }, body: '' };
 
   try {
     const body = event.body
