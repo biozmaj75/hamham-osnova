@@ -55,7 +55,9 @@ async function api(req, res) {
 async function file(req, res) {
   const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   let p = path.resolve(SITE, `.${url}`);
-  if (!p.startsWith(SITE)) { res.writeHead(403).end(); return; }
+  // Prevent directory traversal attacks outside the SITE folder
+  const rel = path.relative(SITE, p);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) { res.writeHead(403).end(); return; }
   let data;
   try {
     if ((await fs.stat(p)).isDirectory()) p = path.join(p, 'index.html');
@@ -69,6 +71,9 @@ async function file(req, res) {
     'Content-Type': TYPES[path.extname(p).toLowerCase()] || 'application/octet-stream',
     'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
     'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   });
   res.end(req.method === 'HEAD' ? undefined : data);
 }
