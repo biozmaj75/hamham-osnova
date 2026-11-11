@@ -53,9 +53,18 @@ async function api(req, res) {
 
 // Static files; any other path is the app itself (index.html)
 async function file(req, res) {
-  const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  let url;
+  try {
+    url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
+  // Security: reject null bytes and strictly enforce directory boundary with path separator
+  if (url.includes('\0')) { res.writeHead(403).end(); return; }
   let p = path.resolve(SITE, `.${url}`);
-  if (!p.startsWith(SITE)) { res.writeHead(403).end(); return; }
+  const sitePrefix = SITE.endsWith(path.sep) ? SITE : SITE + path.sep;
+  if (p !== SITE && !p.startsWith(sitePrefix)) { res.writeHead(403).end(); return; }
   let data;
   try {
     if ((await fs.stat(p)).isDirectory()) p = path.join(p, 'index.html');
@@ -69,6 +78,8 @@ async function file(req, res) {
     'Content-Type': TYPES[path.extname(p).toLowerCase()] || 'application/octet-stream',
     'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
     'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
   });
   res.end(req.method === 'HEAD' ? undefined : data);
 }
